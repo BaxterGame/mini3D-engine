@@ -1,4 +1,4 @@
-// mini-engine v0.1c — refactor: renderer + cameraController extraits
+// mini-engine v0.1d — refactor: renderer + cameraController extraits
 // Note: ouvre via un petit serveur local (file:// bloque souvent les modules).
 
 import { BORDER_HALF, INNER_LIMIT, WIN_SCORE, BASE_ENEMIES, CHUNK_SIZE, CHUNK_RADIUS, WALL_HALF } from './config.js';
@@ -9,6 +9,9 @@ import { bindKeyboard } from './input/keyboard.js';
 import { createHud } from './ui/hud.js';
 import { createRenderer, handleResize, setOrthoSize } from './render/renderer.js';
 import { createCameraController } from './render/cameraController.js';
+import { createCollisionSystem } from './world/collision.js';
+import { createChunkSystem } from './world/chunks.js';
+import { createWallMeshFactory, createWallsSystem } from './world/walls.js';
 
 if (location.protocol === 'file:') {
   const box = document.getElementById('error');
@@ -74,7 +77,6 @@ const errorBox = document.getElementById('error');
     let prevKeys = Object.create(null);
     let timeElapsed = 0;
     let actionCooldown = 0;
-    let lastWallActionCellKey = '';
     let spawnCooldown = 0;
     let score = 0;
     let missionComplete = false;
@@ -82,149 +84,14 @@ const errorBox = document.getElementById('error');
     let cameraController = null;
     const { cameraState, enemies, coins, particles, userWalls, userWallSet, gridChunks, shared } = createState(THREE);
 
-    function isBorderCell(x, z) {
-      if (Math.abs(x) === BORDER_HALF && z >= -BORDER_HALF && z <= BORDER_HALF) return true;
-      if (Math.abs(z) === BORDER_HALF && x >= -BORDER_HALF && x <= BORDER_HALF) return true;
-      return false;
-    }
 
-    function isSolidCell(x, z) {
-      return isBorderCell(x, z) || userWallSet.has(keyForCell(x, z));
-    }
+    const collision = createCollisionSystem({ BORDER_HALF, WALL_HALF, keyForCell, userWallSet });
+    const { isBorderCell, collidesAt, collidesAtPlayer, collidesAtUserWalls, probeBlockedDirections } = collision;
 
-    function circleVsCell(x, z, radius, cellX, cellZ) {
-      const nearestX = Math.max(cellX - WALL_HALF, Math.min(x, cellX + WALL_HALF));
-      const nearestZ = Math.max(cellZ - WALL_HALF, Math.min(z, cellZ + WALL_HALF));
-      const dx = x - nearestX;
-      const dz = z - nearestZ;
-      return dx * dx + dz * dz < radius * radius;
-    }
 
-    function collidesAt(x, z, radius) {
-      const minX = Math.floor(x - radius - 1);
-      const maxX = Math.ceil(x + radius + 1);
-      const minZ = Math.floor(z - radius - 1);
-      const maxZ = Math.ceil(z + radius + 1);
-      for (let cx = minX; cx <= maxX; cx++) {
-        for (let cz = minZ; cz <= maxZ; cz++) {
-          if (!isSolidCell(cx, cz)) continue;
-          if (circleVsCell(x, z, radius, cx, cz)) return true;
-        }
-      }
-      return false;
-    }
-
-    function collidesAtPlayer(x, z, radius) {
-      const minX = Math.floor(x - radius - 1);
-      const maxX = Math.ceil(x + radius + 1);
-      const minZ = Math.floor(z - radius - 1);
-      const maxZ = Math.ceil(z + radius + 1);
-      for (let cx = minX; cx <= maxX; cx++) {
-        for (let cz = minZ; cz <= maxZ; cz++) {
-          if (!isBorderCell(cx, cz)) continue;
-          if (circleVsCell(x, z, radius, cx, cz)) return true;
-        }
-      }
-      return false;
-    }
-
-    function collidesAtUserWalls(x, z, radius) {
-      const minX = Math.floor(x - radius - 1);
-      const maxX = Math.ceil(x + radius + 1);
-      const minZ = Math.floor(z - radius - 1);
-      const maxZ = Math.ceil(z + radius + 1);
-      for (let cx = minX; cx <= maxX; cx++) {
-        for (let cz = minZ; cz <= maxZ; cz++) {
-          if (!userWallSet.has(keyForCell(cx, cz))) continue;
-          if (circleVsCell(x, z, radius, cx, cz)) return true;
-        }
-      }
-      return false;
-    }
-
-    function probeBlockedDirections(x, z, radius, userOnly = false) {
-      const probe = radius + 0.38;
-      const testRadius = 0.22;
-      const hit = userOnly ? collidesAtUserWalls : collidesAt;
-      const left = hit(x - probe, z, testRadius);
-      const right = hit(x + probe, z, testRadius);
-      const up = hit(x, z - probe, testRadius);
-      const down = hit(x, z + probe, testRadius);
-      return {
-        left,
-        right,
-        up,
-        down,
-        count: (left ? 1 : 0) + (right ? 1 : 0) + (up ? 1 : 0) + (down ? 1 : 0)
-      };
-    }
-
-    function createChunkTemplate() {
-      const group = new THREE.Group();
-
-      const plane = new THREE.Mesh(
-        new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE),
-        new THREE.MeshStandardMaterial({
-          color: 0x0c1118,
-          roughness: 0.96,
-          metalness: 0.03
-        })
-      );
-      plane.rotation.x = -Math.PI / 2;
-      plane.receiveShadow = true;
-      group.add(plane);
-
-      const vertices = [];
-      const half = CHUNK_SIZE * 0.5;
-      for (let i = 0; i <= CHUNK_SIZE; i++) {
-        const p = -half + i;
-        vertices.push(-half, 0.01, p, half, 0.01, p);
-        vertices.push(p, 0.01, -half, p, 0.01, half);
-      }
-      const lineGeo = new THREE.BufferGeometry();
-      lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-      const lines = new THREE.LineSegments(
-        lineGeo,
-        new THREE.LineBasicMaterial({ color: 0x163049, transparent: true, opacity: 0.35 })
-      );
-      group.add(lines);
-
-      const edge = new THREE.LineSegments(
-        new THREE.EdgesGeometry(new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE)),
-        new THREE.LineBasicMaterial({ color: 0x1f4667, transparent: true, opacity: 0.18 })
-      );
-      edge.rotation.x = -Math.PI / 2;
-      edge.position.y = 0.02;
-      group.add(edge);
-
-      return group;
-    }
-
-    function ensureChunksAround(x, z) {
-      const chunkX = Math.floor(x / CHUNK_SIZE);
-      const chunkZ = Math.floor(z / CHUNK_SIZE);
-      const needed = new Set();
-
-      for (let cz = chunkZ - CHUNK_RADIUS; cz <= chunkZ + CHUNK_RADIUS; cz++) {
-        for (let cx = chunkX - CHUNK_RADIUS; cx <= chunkX + CHUNK_RADIUS; cx++) {
-          const key = `${cx},${cz}`;
-          needed.add(key);
-          if (!gridChunks.has(key)) {
-            const chunk = createChunkTemplate();
-            chunk.position.set(cx * CHUNK_SIZE + CHUNK_SIZE * 0.5, 0, cz * CHUNK_SIZE + CHUNK_SIZE * 0.5);
-            scene.add(chunk);
-            gridChunks.set(key, chunk);
-          }
-        }
-      }
-
-      for (const [key, chunk] of gridChunks) {
-        if (!needed.has(key)) {
-          scene.remove(chunk);
-          gridChunks.delete(key);
-        }
-      }
-    }
+    let chunkSystem = null;
+    let wallsSystem = null;
+    const createWallMesh = createWallMeshFactory({ THREE, shared });
 
     function makeScene() {
       scene = new THREE.Scene();
@@ -276,7 +143,7 @@ const errorBox = document.getElementById('error');
       }
       scene.add(borderGroup);
 
-      ensureChunksAround(0, 0);
+      // chunks initialisés par chunkSystem.ensureChunksAround() dans la boucle
     }
 
     function createPlayer() {
@@ -320,17 +187,6 @@ const errorBox = document.getElementById('error');
       playerHalo = halo;
     }
 
-    function createWallMesh(x, z, isBorder = false) {
-      const mesh = new THREE.Mesh(
-        shared.wallGeo,
-        isBorder ? shared.borderWallMat : shared.userWallMat
-      );
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.position.set(x, 1.1, z);
-      return mesh;
-    }
-
     function clearDynamicEntities() {
       while (enemies.length) {
         const enemy = enemies.pop();
@@ -357,7 +213,7 @@ const errorBox = document.getElementById('error');
       missionComplete = false;
       timeElapsed = 0;
       actionCooldown = 0;
-      lastWallActionCellKey = '';
+      if (wallsSystem) wallsSystem.clearLastActionCell();
       spawnCooldown = 0.4;
       player.x = 0;
       player.z = 0;
@@ -443,44 +299,6 @@ const errorBox = document.getElementById('error');
         });
       }
       particles.push({ life: 0.55, parts });
-    }
-
-    function removeUserWallAt(cellX, cellZ) {
-      const key = keyForCell(cellX, cellZ);
-      for (let i = userWalls.length - 1; i >= 0; i--) {
-        const wall = userWalls[i];
-        if (wall.x === cellX && wall.z === cellZ) {
-          scene.remove(wall.mesh);
-          userWalls.splice(i, 1);
-          break;
-        }
-      }
-      userWallSet.delete(key);
-      burstAt(cellX, 0.9, cellZ, 0x9fe8ff, 3);
-      refreshHud();
-    }
-
-    function toggleWallAtPlayer() {
-      const placeX = Math.round(player.x);
-      const placeZ = Math.round(player.z);
-      const key = keyForCell(placeX, placeZ);
-
-      if (Math.abs(placeX) >= BORDER_HALF || Math.abs(placeZ) >= BORDER_HALF) return;
-      if (isBorderCell(placeX, placeZ)) return;
-      if (lastWallActionCellKey === key) return;
-      lastWallActionCellKey = key;
-
-      if (userWallSet.has(key)) {
-        removeUserWallAt(placeX, placeZ);
-        return;
-      }
-
-      const mesh = createWallMesh(placeX, placeZ, false);
-      scene.add(mesh);
-      userWalls.push({ x: placeX, z: placeZ, mesh });
-      userWallSet.add(key);
-      burstAt(placeX, 0.9, placeZ, 0x75f7ff, 4);
-      refreshHud();
     }
 
     function updatePlayer(delta) {
@@ -714,12 +532,12 @@ const errorBox = document.getElementById('error');
       handleEdgeKeys();
 
       updatePlayer(delta);
-      if (keys[' ']) {
-        toggleWallAtPlayer();
-      } else {
-        lastWallActionCellKey = '';
+      if (keys[' '] && wallsSystem) {
+        wallsSystem.toggleWallAtPlayer();
+      } else if (wallsSystem) {
+        wallsSystem.clearLastActionCell();
       }
-      ensureChunksAround(player.x, player.z);
+      if (chunkSystem) chunkSystem.ensureChunksAround(player.x, player.z);
       updateEnemies(delta);
       updateCoins(delta);
       updateParticles(delta);
@@ -741,6 +559,20 @@ const errorBox = document.getElementById('error');
       renderer = createRenderer(THREE, document.getElementById('app'));
       makeScene();
       createPlayer();
+
+      chunkSystem = createChunkSystem({ THREE, scene, gridChunks, CHUNK_SIZE, CHUNK_RADIUS });
+      wallsSystem = createWallsSystem({
+        scene,
+        userWalls,
+        userWallSet,
+        keyForCell,
+        BORDER_HALF,
+        isBorderCell,
+        burstAt,
+        refreshHud,
+        getPlayer: () => player,
+        createWallMesh
+      });
       cameraController = createCameraController({ THREE, orthoCamera, perspectiveCamera, cameraState, playerPulseLight });
       activeCamera = orthoCamera;
       clock = new THREE.Clock();
@@ -757,7 +589,7 @@ const errorBox = document.getElementById('error');
           orthoSize: cameraController ? cameraController.getOrthoSize() : 22
         });
       });
-      unbindKeyboard = bindKeyboard(keys, { onSpaceRelease: () => { lastWallActionCellKey = ''; } });
+      unbindKeyboard = bindKeyboard(keys, { onSpaceRelease: () => { if (wallsSystem) wallsSystem.clearLastActionCell(); } });
       resetGame();
       animate();
     }
