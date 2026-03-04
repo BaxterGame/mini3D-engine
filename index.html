@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poly-Battle 3D • Navigation Proto</title>
+  <style>
+    :root {
+      --bg: #070a10;
+      --panel: rgba(9, 14, 21, 0.78);
+      --line: rgba(255, 255, 255, 0.08);
+      --text: #edf2fb;
+      --muted: #8ca0bb;
+      --gold: #ffd76b;
+      --cyan: #74f6ff;
+      --blue: #7ab6ff;
+      --green: #7dffba;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 20%, #101724 0%, #080b11 56%, #04060a 100%);
+      color: var(--text);
+      font-family: Inter, Arial, Helvetica, sans-serif;
+    }
+
+    #app {
+      position: fixed;
+      inset: 0;
+    }
+
+    #hud {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 14px;
+      gap: 14px;
+    }
+
+    .stack {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .card {
+      min-width: 126px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+    }
+
+    .label {
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .value {
+      font-size: 1rem;
+      font-weight: 700;
+    }
+
+    #titleCard {
+      min-width: min(520px, calc(100vw - 28px));
+      text-align: center;
+    }
+
+    #titleCard .value {
+      color: var(--gold);
+      letter-spacing: 0.04em;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      pointer-events: auto;
+    }
+
+    .btn {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 12px;
+      cursor: pointer;
+      font: inherit;
+      font-size: 0.92rem;
+      transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.05);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    .btn.is-active {
+      border-color: rgba(116,246,255,0.28);
+      background: rgba(116,246,255,0.08);
+      color: var(--cyan);
+    }
+
+    #hint,
+    #status {
+      pointer-events: none;
+      text-align: center;
+    }
+
+    .hintCard {
+      width: min(1100px, calc(100vw - 28px));
+      padding: 10px 14px;
+      border-radius: 16px;
+      font-size: 0.84rem;
+      color: #becada;
+    }
+
+    .statusCard {
+      min-width: min(420px, calc(100vw - 28px));
+      max-width: min(780px, calc(100vw - 28px));
+      padding: 8px 14px;
+      border-radius: 999px;
+      color: #d8e6f8;
+      font-size: 0.88rem;
+      letter-spacing: 0.03em;
+    }
+
+    #error {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      display: none;
+      z-index: 30;
+      width: min(620px, calc(100vw - 32px));
+      padding: 18px;
+      border-radius: 16px;
+      background: rgba(22, 11, 11, 0.95);
+      color: #ffd0d0;
+      border: 1px solid rgba(255, 120, 120, 0.28);
+      line-height: 1.5;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="hud">
+    <div class="stack topStack">
+      <div class="row">
+        <div id="titleCard" class="card">
+          <div class="label">Prototype</div>
+          <div class="value">NAVIGATION 3D • ZONE 100×100 • RÉCUPÈRE 3 PIÈCES D’OR</div>
+        </div>
+        <div class="card">
+          <div class="label">Vue active</div>
+          <div id="viewValue" class="value" style="color: var(--cyan);">TOP</div>
+        </div>
+        <div class="card">
+          <div class="label">Projection caméra</div>
+          <div id="projectionValue" class="value">ISOMÉTRIQUE</div>
+        </div>
+        <div class="card">
+          <div class="label">Progression</div>
+          <div id="scoreValue" class="value">0 / 3</div>
+        </div>
+      </div>
+
+      <div id="status" class="card statusCard">Top = lecture de l’espace et navigation libre</div>
+    </div>
+
+    <div class="stack bottomStack">
+      <div class="row">
+        <div class="card">
+          <div class="label">Interface vue</div>
+          <div class="controls">
+            <button id="toggleViewBtn" class="btn">Top view ↔ Camera</button>
+            <button id="toggleProjectionBtn" class="btn">Isométrique ↔ Perspective</button>
+            <button id="toggleSandboxBtn" class="btn">Mission ↔ Exploration</button>
+            <button id="orbitLeftBtn" class="btn">↺ 90°</button>
+            <button id="orbitRightBtn" class="btn">↻ 90°</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="label">Ennemis</div>
+          <div id="enemyValue" class="value">0</div>
+        </div>
+        <div class="card">
+          <div class="label">Murs posés</div>
+          <div id="wallValue" class="value">0</div>
+        </div>
+        <div class="card">
+          <div class="label">Mode</div>
+          <div id="missionValue" class="value" style="color: var(--green);">MISSION</div>
+        </div>
+      </div>
+
+      <div id="hint" class="card hintCard">Déplacement : ZQSD / WASD / flèches • Espace = construire/détruire un mur • V = top/camera • C = iso/perspective • M = mission/exploration • J = ↺ 90° • L ou X = ↻ 90° • R = relancer</div>
+    </div>
+  </div>
+
+  <div id="error"></div>
+
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script type="module" src="./src/main.js"></script>
+
+</body>
+</html>
