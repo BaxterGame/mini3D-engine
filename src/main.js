@@ -1,5 +1,15 @@
-// mini-engine v0.1a — script externalisé en ES module
+// mini-engine v0.1c — refactor: renderer + cameraController extraits
 // Note: ouvre via un petit serveur local (file:// bloque souvent les modules).
+
+import { BORDER_HALF, INNER_LIMIT, WIN_SCORE, BASE_ENEMIES, CHUNK_SIZE, CHUNK_RADIUS, WALL_HALF } from './config.js';
+import { createState } from './state.js';
+import { clamp, rand, normalize2D, rotateVector } from './utils/math.js';
+import { keyForCell } from './utils/grid.js';
+import { bindKeyboard } from './input/keyboard.js';
+import { createHud } from './ui/hud.js';
+import { createRenderer, handleResize, setOrthoSize } from './render/renderer.js';
+import { createCameraController } from './render/cameraController.js';
+
 if (location.protocol === 'file:') {
   const box = document.getElementById('error');
   if (box) {
@@ -31,13 +41,20 @@ const errorBox = document.getElementById('error');
     const orbitLeftBtn = document.getElementById('orbitLeftBtn');
     const orbitRightBtn = document.getElementById('orbitRightBtn');
 
-    const BORDER_HALF = 50;
-    const INNER_LIMIT = 48.6;
-    const WIN_SCORE = 3;
-    const BASE_ENEMIES = 6;
-    const CHUNK_SIZE = 20;
-    const CHUNK_RADIUS = 3;
-    const WALL_HALF = 0.48;
+    const hud = createHud({
+      viewValue,
+      projectionValue,
+      scoreValue,
+      enemyValue,
+      wallValue,
+      missionValue,
+      statusText,
+      toggleViewBtn,
+      toggleProjectionBtn,
+      toggleSandboxBtn,
+      orbitLeftBtn,
+      orbitRightBtn
+    }, { WIN_SCORE });
 
     let renderer;
     let scene;
@@ -46,6 +63,7 @@ const errorBox = document.getElementById('error');
     let activeCamera;
     let clock;
     let animationId = null;
+    let unbindKeyboard = null;
 
     let player;
     let playerGroup;
@@ -60,74 +78,9 @@ const errorBox = document.getElementById('error');
     let spawnCooldown = 0;
     let score = 0;
     let missionComplete = false;
-
-    let followMode = 'top';
-    let cameraProjectionMode = 'iso';
     let worldMode = 'mission';
-    let currentOrthoSize = 22;
-    let cameraOrbitSteps = 0;
-    let cameraOrbitAngle = 0;
-
-    const cameraState = {
-      pos: new THREE.Vector3(),
-      look: new THREE.Vector3(),
-      key: '',
-      ready: false
-    };
-
-    const enemies = [];
-    const coins = [];
-    const particles = [];
-    const userWalls = [];
-    const userWallSet = new Set();
-    const gridChunks = new Map();
-
-    const shared = {
-      wallGeo: new THREE.BoxGeometry(1, 2.2, 1),
-      userWallMat: new THREE.MeshStandardMaterial({
-        color: 0x7ef9ff,
-        emissive: 0x34d7df,
-        emissiveIntensity: 0.34,
-        roughness: 0.7,
-        metalness: 0.1
-      }),
-      borderWallMat: new THREE.MeshStandardMaterial({
-        color: 0x142231,
-        emissive: 0x0f2b3e,
-        emissiveIntensity: 0.16,
-        roughness: 0.84,
-        metalness: 0.08
-      }),
-      coinCoreMat: new THREE.MeshStandardMaterial({
-        color: 0xffe08a,
-        emissive: 0xffc93a,
-        emissiveIntensity: 1.05,
-        roughness: 0.2,
-        metalness: 0.35,
-        flatShading: true
-      }),
-      particleGeo: new THREE.SphereGeometry(0.08, 5, 5),
-      enemyGeo: new THREE.IcosahedronGeometry(0.7, 0)
-    };
-
-    function clamp(value, min, max) {
-      return Math.max(min, Math.min(max, value));
-    }
-
-    function rand(min, max) {
-      return Math.random() * (max - min) + min;
-    }
-
-    function normalize2D(v) {
-      const len = Math.hypot(v.x, v.z) || 1;
-      v.x /= len;
-      v.z /= len;
-      return v;
-    }
-
-    function keyForCell(x, z) {
-      return `${x},${z}`;
-    }
+    let cameraController = null;
+    const { cameraState, enemies, coins, particles, userWalls, userWallSet, gridChunks, shared } = createState(THREE);
 
     function isBorderCell(x, z) {
       if (Math.abs(x) === BORDER_HALF && z >= -BORDER_HALF && z <= BORDER_HALF) return true;
@@ -206,28 +159,6 @@ const errorBox = document.getElementById('error');
       };
     }
 
-    function makeRenderer() {
-      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-      document.getElementById('app').appendChild(renderer.domElement);
-    }
-
-    function updateOrthoCameraBounds(size = currentOrthoSize) {
-      if (!orthoCamera) return;
-      currentOrthoSize = size;
-      const aspect = window.innerWidth / window.innerHeight;
-      orthoCamera.left = -size * aspect;
-      orthoCamera.right = size * aspect;
-      orthoCamera.top = size;
-      orthoCamera.bottom = -size;
-      orthoCamera.near = 0.1;
-      orthoCamera.far = 400;
-      orthoCamera.updateProjectionMatrix();
-    }
-
     function createChunkTemplate() {
       const group = new THREE.Group();
 
@@ -303,7 +234,7 @@ const errorBox = document.getElementById('error');
       perspectiveCamera = new THREE.PerspectiveCamera(56, window.innerWidth / window.innerHeight, 0.1, 400);
       orthoCamera = new THREE.OrthographicCamera();
       orthoCamera.up.set(0, 0, -1);
-      updateOrthoCameraBounds();
+      setOrthoSize(orthoCamera, 22);
       activeCamera = orthoCamera;
 
       const hemi = new THREE.HemisphereLight(0xb7dcff, 0x06090f, 0.92);
@@ -552,12 +483,6 @@ const errorBox = document.getElementById('error');
       refreshHud();
     }
 
-    function rotateVector(x, z, angle) {
-      const c = Math.cos(angle);
-      const s = Math.sin(angle);
-      return { x: x * c - z * s, z: x * s + z * c };
-    }
-
     function updatePlayer(delta) {
       const left = !!(keys['arrowleft'] || keys['q'] || keys['a']);
       const right = !!(keys['arrowright'] || keys['d']);
@@ -574,8 +499,8 @@ const errorBox = document.getElementById('error');
         player.lastMove.x = moveX;
         player.lastMove.z = moveZ;
         player.yaw = Math.atan2(moveX, moveZ);
-        if (followMode === 'camera' && cameraOrbitSteps !== 0) {
-          cameraOrbitSteps = 0;
+        if (cameraController && cameraController.getFollowMode() === 'camera' && cameraController.getOrbitSteps() !== 0) {
+          cameraController.resetOrbit();
         }
       } else {
         moveX = 0;
@@ -744,161 +669,23 @@ const errorBox = document.getElementById('error');
       }
     }
 
-    function syncViewUi() {
-      const modePrefix = worldMode === 'exploration' ? 'Exploration' : 'Mission';
-
-      if (followMode === 'top') {
-        viewValue.textContent = 'TOP';
-        viewValue.style.color = '#74f6ff';
-        statusText.textContent = `${modePrefix} • Top = lecture claire et déplacement libre`;
-        toggleViewBtn.classList.add('is-active');
-      } else if (cameraProjectionMode === 'iso') {
-        viewValue.textContent = 'CAMÉRA ISO';
-        viewValue.style.color = '#7ab6ff';
-        statusText.textContent = `${modePrefix} • Caméra isométrique = lecture douce, style maquette`;
-        toggleViewBtn.classList.remove('is-active');
-      } else {
-        viewValue.textContent = 'CAMÉRA PERSP';
-        viewValue.style.color = '#ffd76b';
-        statusText.textContent = `${modePrefix} • Caméra perspective = suivi plus immersif`;
-        toggleViewBtn.classList.remove('is-active');
-      }
-
-      projectionValue.textContent = cameraProjectionMode === 'iso' ? 'ISOMÉTRIQUE' : 'PERSPECTIVE';
-      toggleProjectionBtn.classList.toggle('is-active', cameraProjectionMode === 'iso');
-      toggleSandboxBtn.classList.toggle('is-active', worldMode === 'exploration');
-      orbitLeftBtn.classList.toggle('is-active', followMode === 'camera');
-      orbitRightBtn.classList.toggle('is-active', followMode === 'camera');
-    }
 
     function refreshHud() {
-      scoreValue.textContent = `${score} / ${WIN_SCORE}`;
-      enemyValue.textContent = `${enemies.length}`;
-      wallValue.textContent = `${userWalls.length}`;
-
-      if (worldMode === 'exploration') {
-        missionValue.textContent = 'EXPLORATION';
-        missionValue.style.color = '#74f6ff';
-      } else if (missionComplete) {
-        missionValue.textContent = 'MISSION OK';
-        missionValue.style.color = '#ffd76b';
-      } else {
-        missionValue.textContent = 'MISSION';
-        missionValue.style.color = '#7dffba';
-      }
-
-      syncViewUi();
+      hud.refresh({
+        score,
+        enemiesCount: enemies.length,
+        wallsCount: userWalls.length,
+        worldMode,
+        missionComplete,
+        followMode: cameraController ? cameraController.getFollowMode() : 'top',
+        cameraProjectionMode: cameraController ? cameraController.getProjectionMode() : 'iso'
+      });
     }
 
-    function updateCamera(delta) {
-      const posSmooth = 1 - Math.exp(-4.8 * delta);
-      const lookSmooth = 1 - Math.exp(-7.2 * delta);
-      const orbitSmooth = 1 - Math.exp(-10.5 * delta);
-      cameraOrbitAngle += (cameraOrbitSteps * (Math.PI / 2) - cameraOrbitAngle) * orbitSmooth;
-
-      let desiredPos;
-      let desiredLook;
-      let nextCamera;
-      const modeKey = `${followMode}-${cameraProjectionMode}`;
-
-      if (followMode === 'top') {
-        nextCamera = orthoCamera;
-        orthoCamera.up.set(0, 0, -1);
-        updateOrthoCameraBounds(25);
-        desiredPos = new THREE.Vector3(player.x, 46, player.z + 0.001);
-        desiredLook = new THREE.Vector3(player.x, 0, player.z);
-      } else if (cameraProjectionMode === 'iso') {
-        nextCamera = orthoCamera;
-        orthoCamera.up.set(0, 1, 0);
-        updateOrthoCameraBounds(20);
-        const isoOffset = rotateVector(18, 18, cameraOrbitAngle);
-        desiredPos = new THREE.Vector3(player.x + isoOffset.x, 18, player.z + isoOffset.z);
-        desiredLook = new THREE.Vector3(player.x, 0.7, player.z);
-      } else {
-        nextCamera = perspectiveCamera;
-        const dirX = player.lastMove.x || 0;
-        const dirZ = player.lastMove.z || -1;
-        const sideX = -dirZ;
-        const sideZ = dirX;
-        const basePosOffset = rotateVector(-dirX * 10 + sideX * 4, -dirZ * 10 + sideZ * 4, cameraOrbitAngle);
-        const baseLookOffset = rotateVector(dirX * 2.2, dirZ * 2.2, cameraOrbitAngle);
-        desiredPos = new THREE.Vector3(
-          player.x + basePosOffset.x,
-          9.4,
-          player.z + basePosOffset.z
-        );
-        desiredLook = new THREE.Vector3(player.x + baseLookOffset.x, 1.0, player.z + baseLookOffset.z);
-      }
-
-      if (!cameraState.ready || cameraState.key !== modeKey) {
-        cameraState.pos.copy(desiredPos);
-        cameraState.look.copy(desiredLook);
-        cameraState.key = modeKey;
-        cameraState.ready = true;
-      } else {
-        cameraState.pos.lerp(desiredPos, posSmooth);
-        cameraState.look.lerp(desiredLook, lookSmooth);
-      }
-
-      activeCamera = nextCamera;
-      activeCamera.position.copy(cameraState.pos);
-      activeCamera.lookAt(cameraState.look);
-
-      playerPulseLight.position.x = player.x;
-      playerPulseLight.position.z = player.z;
-      playerPulseLight.intensity = 1.1 + Math.sin(timeElapsed * 4.5) * 0.08;
-    }
-
-    function toggleViewMode() {
-      followMode = followMode === 'top' ? 'camera' : 'top';
-      refreshHud();
-    }
-
-    function toggleProjectionMode() {
-      cameraProjectionMode = cameraProjectionMode === 'iso' ? 'perspective' : 'iso';
-      refreshHud();
-    }
 
     function toggleWorldMode() {
       worldMode = worldMode === 'mission' ? 'exploration' : 'mission';
       refreshHud();
-    }
-
-    function rotateCameraOrbit(step) {
-      cameraOrbitSteps += step;
-      refreshHud();
-    }
-
-    function onResize() {
-      if (!renderer) return;
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-      if (perspectiveCamera) {
-        perspectiveCamera.aspect = window.innerWidth / window.innerHeight;
-        perspectiveCamera.updateProjectionMatrix();
-      }
-      updateOrthoCameraBounds();
-    }
-
-    function onKeyDown(event) {
-      const key = event.key.toLowerCase();
-      if ([
-        'arrowup', 'arrowdown', 'arrowleft', 'arrowright',
-        ' ', 'spacebar', 'w', 'a', 's', 'd', 'z', 'q', 'shift', 'r', 'v', 'c', 'm', 'j', 'l', 'x'
-      ].includes(key) || event.code === 'Space') {
-        event.preventDefault();
-      }
-      keys[key] = true;
-      if (event.code === 'Space') keys[' '] = true;
-    }
-
-    function onKeyUp(event) {
-      const key = event.key.toLowerCase();
-      keys[key] = false;
-      if (event.code === 'Space') {
-        keys[' '] = false;
-        lastWallActionCellKey = '';
-      }
     }
 
     function handleEdgeKeys() {
@@ -909,11 +696,11 @@ const errorBox = document.getElementById('error');
       const orbitLeftPressed = !!keys['j'] && !prevKeys['j'];
       const orbitRightPressed = (!!keys['l'] && !prevKeys['l']) || (!!keys['x'] && !prevKeys['x']);
       if (restartPressed) resetGame();
-      if (viewPressed) toggleViewMode();
-      if (projectionPressed) toggleProjectionMode();
+      if (viewPressed && cameraController) { cameraController.toggleView(); refreshHud(); }
+      if (projectionPressed && cameraController) { cameraController.toggleProjection(); refreshHud(); }
       if (sandboxPressed) toggleWorldMode();
-      if (orbitLeftPressed) rotateCameraOrbit(-1);
-      if (orbitRightPressed) rotateCameraOrbit(1);
+      if (orbitLeftPressed && cameraController) { cameraController.rotateOrbit(-1); }
+      if (orbitRightPressed && cameraController) { cameraController.rotateOrbit(1); }
     }
 
     function copyKeyState() {
@@ -937,7 +724,7 @@ const errorBox = document.getElementById('error');
       updateCoins(delta);
       updateParticles(delta);
       tryMaintainEnemies(delta);
-      updateCamera(delta);
+      if (cameraController) { activeCamera = cameraController.update(delta, timeElapsed, player); }
       refreshHud();
 
       renderer.render(scene, activeCamera);
@@ -951,24 +738,33 @@ const errorBox = document.getElementById('error');
     }
 
     function init() {
-      makeRenderer();
+      renderer = createRenderer(THREE, document.getElementById('app'));
       makeScene();
       createPlayer();
+      cameraController = createCameraController({ THREE, orthoCamera, perspectiveCamera, cameraState, playerPulseLight });
+      activeCamera = orthoCamera;
       clock = new THREE.Clock();
-      toggleViewBtn.addEventListener('click', toggleViewMode);
-      toggleProjectionBtn.addEventListener('click', toggleProjectionMode);
+      toggleViewBtn.addEventListener('click', () => { if (!cameraController) return; cameraController.toggleView(); refreshHud(); });
+      toggleProjectionBtn.addEventListener('click', () => { if (!cameraController) return; cameraController.toggleProjection(); refreshHud(); });
       toggleSandboxBtn.addEventListener('click', toggleWorldMode);
-      orbitLeftBtn.addEventListener('click', () => rotateCameraOrbit(-1));
-      orbitRightBtn.addEventListener('click', () => rotateCameraOrbit(1));
-      window.addEventListener('resize', onResize);
-      window.addEventListener('keydown', onKeyDown, { passive: false });
-      window.addEventListener('keyup', onKeyUp);
+      orbitLeftBtn.addEventListener('click', () => { if (!cameraController) return; cameraController.rotateOrbit(-1); });
+      orbitRightBtn.addEventListener('click', () => { if (!cameraController) return; cameraController.rotateOrbit(1); });
+      window.addEventListener('resize', () => {
+        handleResize({
+          renderer,
+          perspectiveCamera,
+          orthoCamera,
+          orthoSize: cameraController ? cameraController.getOrthoSize() : 22
+        });
+      });
+      unbindKeyboard = bindKeyboard(keys, { onSpaceRelease: () => { lastWallActionCellKey = ''; } });
       resetGame();
       animate();
     }
 
     window.addEventListener('beforeunload', () => {
       if (animationId) cancelAnimationFrame(animationId);
+      if (unbindKeyboard) unbindKeyboard();
     });
 
     init();

@@ -1,33 +1,32 @@
-# mini-engine v0.1a (base refactor)
+# mini-engine v0.1c
 
-## Lancer le prototype
-Ce projet utilise un script `type="module"`. Ouvre-le via un serveur local :
+Objectif : **même prototype**, refactorisation progressive **sans changer le feeling**.
 
-### Option A (Python)
+## Lancer
+
+- VS Code + Live Server : OK
+- ou serveur local :
+
 ```bash
-cd mini-engine-v0.1a
 python -m http.server 8000
 ```
-Puis ouvre `http://localhost:8000/` dans ton navigateur.
 
-### Option B (VS Code)
-Installe l’extension "Live Server" et lance `index.html`.
+Puis ouvre `http://localhost:8000/`.
 
-## Ce que contient v0.1a
-- `index.html` : UI/CSS identiques à la version v4.
-- `src/main.js` : le code original déplacé hors du HTML (comportement identique).
+## Ce qui est extrait (v0.1c)
 
-## Prochaine étape (v0.1b)
-Extraire sans changer le comportement :
-1) `src/config.js` (constantes)
-2) `src/state.js` (état global)
-3) `src/utils/*` (math + grid key)
-4) `src/input/keyboard.js`
-5) `src/ui/hud.js`
-6) `src/render/*` (renderer + camera controller)
-7) `src/world/*` (chunks + collision + walls)
-8) `src/entities/*` (player + enemies + coins)
-9) `src/fx/*`
-10) `src/game/*` (reset + loop)
+En plus de v0.1b :
 
-On garde une règle : **aucune feature** pendant la refacto — uniquement découpage.
+- `src/render/renderer.js` : création du renderer + resize
+- `src/render/cameraController.js` : caméra (Top / Iso / Perspective) + orbite 90°
+
+Le reste (monde, entités, missions, FX…) est encore dans `src/main.js`.
+
+## Prochaine étape (v0.1d)
+
+- sortir `world/` :
+  - `chunks` (grille infinie visuelle)
+  - `collision` (occupation / bordures)
+  - `walls` (build/destroy)
+
+Objectif : continuer à isoler les systèmes **sans ajouter de features**.
