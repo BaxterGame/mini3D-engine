@@ -1,4 +1,4 @@
-// mini-engine v0.1e — refactor: entities extraites (player/enemies/coins)
+// mini-engine v0.1f — refactor: FX extraits (particles)
 // Note: ouvre via un petit serveur local (file:// bloque souvent les modules).
 
 import { BORDER_HALF, INNER_LIMIT, WIN_SCORE, BASE_ENEMIES, CHUNK_SIZE, CHUNK_RADIUS, WALL_HALF } from './config.js';
@@ -15,6 +15,7 @@ import { createWallMeshFactory, createWallsSystem } from './world/walls.js';
 import { createPlayerSystem } from './entities/player.js';
 import { createEnemiesSystem } from './entities/enemies.js';
 import { createCoinsSystem } from './entities/coins.js';
+import { createParticleSystem } from './fx/particles.js';
 
 
 if (location.protocol === 'file:') {
@@ -78,6 +79,7 @@ const errorBox = document.getElementById('error');
     let playerSystem = null;
     let enemiesSystem = null;
     let coinsSystem = null;
+    let particleSystem = null;
 
     let keys = Object.create(null);
     let prevKeys = Object.create(null);
@@ -161,9 +163,13 @@ const errorBox = document.getElementById('error');
         const coin = coins.pop();
         scene.remove(coin.group);
       }
-      while (particles.length) {
-        const burst = particles.pop();
-        for (const p of burst.parts) scene.remove(p.mesh);
+      if (particleSystem) {
+        particleSystem.clear();
+      } else {
+        while (particles.length) {
+          const burst = particles.pop();
+          for (const p of burst.parts) scene.remove(p.mesh);
+        }
       }
       while (userWalls.length) {
         const wall = userWalls.pop();
@@ -198,42 +204,6 @@ const errorBox = document.getElementById('error');
   }
   refreshHud();
 }
-
-    function burstAt(x, y, z, color, count) {
-      const parts = [];
-      for (let i = 0; i < count; i++) {
-        const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.92 });
-        const mesh = new THREE.Mesh(shared.particleGeo, mat);
-        mesh.position.set(x, y, z);
-        scene.add(mesh);
-        parts.push({
-          mesh,
-          vx: rand(-4, 4),
-          vy: rand(1.4, 4.8),
-          vz: rand(-4, 4)
-        });
-      }
-      particles.push({ life: 0.55, parts });
-    }
-
-    function updateParticles(delta) {
-      for (let i = particles.length - 1; i >= 0; i--) {
-        const burst = particles[i];
-        burst.life -= delta;
-        for (const p of burst.parts) {
-          p.mesh.position.x += p.vx * delta;
-          p.mesh.position.y += p.vy * delta;
-          p.mesh.position.z += p.vz * delta;
-          p.vy -= 8 * delta;
-          p.mesh.material.opacity = Math.max(0, burst.life * 2);
-          p.mesh.scale.setScalar(Math.max(0.25, burst.life * 2.4));
-        }
-        if (burst.life <= 0) {
-          for (const p of burst.parts) scene.remove(p.mesh);
-          particles.splice(i, 1);
-        }
-      }
-    }
 
     function tryMaintainEnemies(delta) {
       spawnCooldown -= delta;
@@ -299,7 +269,7 @@ const errorBox = document.getElementById('error');
       if (chunkSystem) chunkSystem.ensureChunksAround(player.x, player.z);
       if (enemiesSystem) enemiesSystem.update(delta);
       if (coinsSystem) coinsSystem.update(delta);
-      updateParticles(delta);
+      if (particleSystem) particleSystem.update(delta);
       tryMaintainEnemies(delta);
       if (cameraController) { activeCamera = cameraController.update(delta, timeElapsed, player); }
       refreshHud();
@@ -330,6 +300,8 @@ playerSystem = createPlayerSystem({
 });
 player = playerSystem.create();
 
+particleSystem = createParticleSystem({ THREE, scene, particles, shared });
+
 coinsSystem = createCoinsSystem({
   THREE,
   scene,
@@ -338,7 +310,7 @@ coinsSystem = createCoinsSystem({
   getPlayer: () => player,
   getWorldMode: () => worldMode,
   getTimeElapsed: () => timeElapsed,
-  burstAt,
+  burstAt: particleSystem.burstAt,
   onCollect: (coin) => {
     score += 1;
     if (score >= WIN_SCORE) missionComplete = true;
@@ -356,7 +328,7 @@ enemiesSystem = createEnemiesSystem({
   getTimeElapsed: () => timeElapsed,
   collidesAt,
   probeBlockedDirections,
-  burstAt,
+  burstAt: particleSystem.burstAt,
   createCoinAt: (x, z) => coinsSystem.createCoinAt(x, z),
   onEnemyTransformed: () => { spawnCooldown = Math.min(spawnCooldown, 0.7); }
 });
@@ -369,7 +341,7 @@ enemiesSystem = createEnemiesSystem({
         keyForCell,
         BORDER_HALF,
         isBorderCell,
-        burstAt,
+        burstAt: particleSystem.burstAt,
         refreshHud,
         getPlayer: () => player,
         createWallMesh
@@ -402,3 +374,5 @@ enemiesSystem = createEnemiesSystem({
 
     init();
 })();
+
+//test
