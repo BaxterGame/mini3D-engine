@@ -1,4 +1,4 @@
-// mini-engine v0.1h — refactor: input clarifié + actions contextuelles
+// mini-engine v0.2a — feature: player modes
 // Note: ouvre via un petit serveur local (file:// bloque souvent les modules).
 
 import {
@@ -8,16 +8,12 @@ import {
   BASE_ENEMIES,
   CHUNK_SIZE,
   CHUNK_RADIUS,
-  WALL_HALF
+  WALL_HALF,
 } from './config.js';
 import { createState } from './state.js';
 import { rand } from './utils/math.js';
 import { keyForCell } from './utils/grid.js';
-import {
-  bindKeyboard,
-  createInputController,
-  createInputState
-} from './input/keyboard.js';
+import { bindKeyboard, createInputController, createInputState } from './input/keyboard.js';
 import { createActionController } from './input/actions.js';
 import { createHud } from './ui/hud.js';
 import { createRenderer, handleResize, setOrthoSize } from './render/renderer.js';
@@ -29,6 +25,7 @@ import { createPlayerSystem } from './entities/player.js';
 import { createEnemiesSystem } from './entities/enemies.js';
 import { createCoinsSystem } from './entities/coins.js';
 import { createParticleSystem } from './fx/particles.js';
+import { createPlayerModesSystem } from './entities/playerModes.js';
 import { createGameLoop } from './game/gameLoop.js';
 import { createResetSystem } from './game/reset.js';
 
@@ -36,7 +33,9 @@ if (location.protocol === 'file:') {
   const box = document.getElementById('error');
   if (box) {
     box.style.display = 'block';
-    box.innerHTML = 'Ce projet utilise ES modules. Ouvre-le via un petit serveur local : `python -m http.server` puis va sur `http://localhost:8000`.';
+    box.innerHTML =
+      'Ce projet utilise ES modules. Ouvre-le via un petit serveur local : ' +
+      '`python -m http.server` puis va sur `http://localhost:8000`.';
   }
 }
 
@@ -44,9 +43,12 @@ const THREE = window.THREE;
 
 (function bootstrap() {
   const errorBox = document.getElementById('error');
+
   if (!window.THREE) {
     errorBox.style.display = 'block';
-    errorBox.innerHTML = 'Impossible de charger Three.js. Cette version dépend du CDN externe. Ouvre le fichier avec une connexion Internet, ou demande-moi une version offline.';
+    errorBox.innerHTML =
+      "Impossible de charger Three.js. Cette version dépend du CDN externe. " +
+      'Ouvre le fichier avec une connexion Internet, ou demande-moi une version offline.';
     return;
   }
 
@@ -76,9 +78,9 @@ const THREE = window.THREE;
       toggleProjectionBtn,
       toggleSandboxBtn,
       orbitLeftBtn,
-      orbitRightBtn
+      orbitRightBtn,
     },
-    { WIN_SCORE }
+    { WIN_SCORE },
   );
 
   let renderer;
@@ -95,8 +97,12 @@ const THREE = window.THREE;
   let enemiesSystem = null;
   let coinsSystem = null;
   let particleSystem = null;
+  let modeSystem = null;
   let resetSystem = null;
   let gameLoop = null;
+  let cameraController = null;
+  let chunkSystem = null;
+  let wallsSystem = null;
 
   const rawInput = createInputState();
   const input = createInputController(rawInput);
@@ -108,71 +114,78 @@ const THREE = window.THREE;
   let score = 0;
   let missionComplete = false;
   let worldMode = 'mission';
-  let cameraController = null;
 
   const runtime = {
     get score() {
       return score;
     },
-    set score(v) {
-      score = v;
+    set score(value) {
+      score = value;
     },
     get missionComplete() {
       return missionComplete;
     },
-    set missionComplete(v) {
-      missionComplete = v;
+    set missionComplete(value) {
+      missionComplete = value;
     },
     get timeElapsed() {
       return timeElapsed;
     },
-    set timeElapsed(v) {
-      timeElapsed = v;
+    set timeElapsed(value) {
+      timeElapsed = value;
     },
     get actionCooldown() {
       return actionCooldown;
     },
-    set actionCooldown(v) {
-      actionCooldown = v;
+    set actionCooldown(value) {
+      actionCooldown = value;
     },
     get spawnCooldown() {
       return spawnCooldown;
     },
-    set spawnCooldown(v) {
-      spawnCooldown = v;
+    set spawnCooldown(value) {
+      spawnCooldown = value;
     },
     get worldMode() {
       return worldMode;
     },
-    set worldMode(v) {
-      worldMode = v;
-    }
+    set worldMode(value) {
+      worldMode = value;
+    },
   };
 
-  const {
-    cameraState,
-    enemies,
-    coins,
-    particles,
-    userWalls,
+  const { cameraState, enemies, coins, particles, userWalls, userWallSet, gridChunks, shared } =
+    createState(THREE);
+
+  const collision = createCollisionSystem({
+    BORDER_HALF,
+    WALL_HALF,
+    keyForCell,
     userWallSet,
-    gridChunks,
-    shared
-  } = createState(THREE);
+  });
 
-  const collision = createCollisionSystem({ BORDER_HALF, WALL_HALF, keyForCell, userWallSet });
   const { isBorderCell, collidesAt, collidesAtPlayer, probeBlockedDirections } = collision;
-
-  let chunkSystem = null;
-  let wallsSystem = null;
   const createWallMesh = createWallMeshFactory({ THREE, shared });
+
+  function getModeContextProfile() {
+    // Hook minimal de "contexte" :
+    // - mission = combat (Projectile dispo)
+    // - exploration = travel (Vehicle dispo)
+    return worldMode === 'exploration' ? 'travel' : 'combat';
+  }
 
   function makeScene() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x070a10);
     scene.fog = new THREE.Fog(0x070a10, 26, 130);
 
-    perspectiveCamera = new THREE.PerspectiveCamera(56, window.innerWidth / window.innerHeight, 0.1, 400);
+    perspectiveCamera = new THREE.PerspectiveCamera(
+      56,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      400,
+    );
+
     orthoCamera = new THREE.OrthographicCamera();
     orthoCamera.up.set(0, 0, -1);
     setOrthoSize(orthoCamera, 22);
@@ -198,29 +211,33 @@ const THREE = window.THREE;
     const stars = new THREE.Group();
     const starGeo = new THREE.SphereGeometry(0.05, 5, 5);
     const starMat = new THREE.MeshBasicMaterial({ color: 0xb9d7ff });
-    for (let i = 0; i < 150; i++) {
+
+    for (let i = 0; i < 150; i += 1) {
       const star = new THREE.Mesh(starGeo, starMat);
       star.position.set(rand(-120, 120), rand(18, 52), rand(-120, 120));
       star.scale.setScalar(rand(0.5, 1.6));
       stars.add(star);
     }
+
     scene.add(stars);
 
     const borderGroup = new THREE.Group();
-    for (let x = -BORDER_HALF; x <= BORDER_HALF; x++) {
+    for (let x = -BORDER_HALF; x <= BORDER_HALF; x += 1) {
       borderGroup.add(createWallMesh(x, BORDER_HALF, true));
       borderGroup.add(createWallMesh(x, -BORDER_HALF, true));
     }
-    for (let z = -BORDER_HALF + 1; z <= BORDER_HALF - 1; z++) {
+
+    for (let z = -BORDER_HALF + 1; z <= BORDER_HALF - 1; z += 1) {
       borderGroup.add(createWallMesh(BORDER_HALF, z, true));
       borderGroup.add(createWallMesh(-BORDER_HALF, z, true));
     }
+
     scene.add(borderGroup);
-    // chunks initialisés par chunkSystem.ensureChunksAround() dans la boucle
   }
 
   function tryMaintainEnemies(delta) {
     spawnCooldown -= delta;
+
     if (worldMode === 'exploration') return;
     if (missionComplete) return;
     if (enemies.length >= BASE_ENEMIES) return;
@@ -239,12 +256,18 @@ const THREE = window.THREE;
       worldMode,
       missionComplete,
       followMode: cameraController ? cameraController.getFollowMode() : 'top',
-      cameraProjectionMode: cameraController ? cameraController.getProjectionMode() : 'iso'
+      cameraProjectionMode: cameraController ? cameraController.getProjectionMode() : 'iso',
+      playerModeLabel: modeSystem ? modeSystem.getCurrentModeLabel() : 'WALL',
     });
   }
 
   function toggleWorldMode() {
     worldMode = worldMode === 'mission' ? 'exploration' : 'mission';
+
+    if (modeSystem) {
+      modeSystem.ensureCurrentModeAvailable();
+    }
+
     refreshHud();
   }
 
@@ -274,18 +297,22 @@ const THREE = window.THREE;
     if (actions.consumeOrbitRight() && cameraController) {
       cameraController.rotateOrbit(1);
     }
+
+    if (actions.consumeNextPlayerMode() && modeSystem) {
+      modeSystem.cycleMode();
+    }
   }
 
   function handleContextualActions() {
-    if (!wallsSystem) return;
+    if (!modeSystem) return;
 
-    if (actions.isWallActionHeld()) {
-      wallsSystem.toggleWallAtPlayer();
+    if (actions.isPrimaryActionHeld()) {
+      modeSystem.handlePrimaryActionHeld();
       return;
     }
 
-    if (actions.consumeWallActionRelease()) {
-      wallsSystem.clearLastActionCell();
+    if (actions.consumePrimaryActionRelease()) {
+      modeSystem.handlePrimaryActionReleased();
     }
   }
 
@@ -297,6 +324,7 @@ const THREE = window.THREE;
     handleContextualActions();
 
     if (playerSystem) playerSystem.update(delta);
+    if (modeSystem) modeSystem.update(delta);
     if (chunkSystem) chunkSystem.ensureChunksAround(player.x, player.z);
     if (enemiesSystem) enemiesSystem.update(delta);
     if (coinsSystem) coinsSystem.update(delta);
@@ -324,11 +352,17 @@ const THREE = window.THREE;
       collidesAtPlayer,
       getTimeElapsed: () => timeElapsed,
       getCameraController: () => cameraController,
-      INNER_LIMIT
+      INNER_LIMIT,
     });
+
     player = playerSystem.create();
 
-    particleSystem = createParticleSystem({ THREE, scene, particles, shared });
+    particleSystem = createParticleSystem({
+      THREE,
+      scene,
+      particles,
+      shared,
+    });
 
     coinsSystem = createCoinsSystem({
       THREE,
@@ -343,7 +377,7 @@ const THREE = window.THREE;
         score += 1;
         if (score >= WIN_SCORE) missionComplete = true;
         refreshHud();
-      }
+      },
     });
 
     enemiesSystem = createEnemiesSystem({
@@ -360,7 +394,7 @@ const THREE = window.THREE;
       createCoinAt: (x, z) => coinsSystem.createCoinAt(x, z),
       onEnemyTransformed: () => {
         spawnCooldown = Math.min(spawnCooldown, 0.7);
-      }
+      },
     });
 
     chunkSystem = createChunkSystem({
@@ -368,7 +402,7 @@ const THREE = window.THREE;
       scene,
       gridChunks,
       CHUNK_SIZE,
-      CHUNK_RADIUS
+      CHUNK_RADIUS,
     });
 
     wallsSystem = createWallsSystem({
@@ -381,7 +415,20 @@ const THREE = window.THREE;
       burstAt: particleSystem.burstAt,
       refreshHud,
       getPlayer: () => player,
-      createWallMesh
+      createWallMesh,
+    });
+
+    modeSystem = createPlayerModesSystem({
+      THREE,
+      scene,
+      enemies,
+      collidesAt,
+      burstAt: particleSystem.burstAt,
+      refreshHud,
+      getPlayer: () => player,
+      getPlayerSystem: () => playerSystem,
+      getWallsSystem: () => wallsSystem,
+      getContextProfile: getModeContextProfile,
     });
 
     cameraController = createCameraController({
@@ -389,8 +436,9 @@ const THREE = window.THREE;
       orthoCamera,
       perspectiveCamera,
       cameraState,
-      playerPulseLight
+      playerPulseLight,
     });
+
     activeCamera = orthoCamera;
     clock = new THREE.Clock();
 
@@ -423,7 +471,7 @@ const THREE = window.THREE;
         renderer,
         perspectiveCamera,
         orthoCamera,
-        orthoSize: cameraController ? cameraController.getOrthoSize() : 22
+        orthoSize: cameraController ? cameraController.getOrthoSize() : 22,
       });
     });
 
@@ -444,19 +492,21 @@ const THREE = window.THREE;
       getWallsSystem: () => wallsSystem,
       getPlayerSystem: () => playerSystem,
       getPlayer: () => player,
-      setPlayer: (p) => {
-        player = p;
+      setPlayer: (nextPlayer) => {
+        player = nextPlayer;
       },
       getEnemiesSystem: () => enemiesSystem,
-      refreshHud
+      getModeSystem: () => modeSystem,
+      refreshHud,
     });
 
     resetSystem.resetGame();
 
     gameLoop = createGameLoop({
       clock,
-      tick: update
+      tick: update,
     });
+
     gameLoop.start();
   }
 

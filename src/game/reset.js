@@ -1,5 +1,5 @@
-// mini-engine v0.1g — reset extrait
-// Refactor-only: même logique qu'avant, isolée dans un module.
+// mini-engine v0.2a — reset extrait
+// Étendu pour remettre à zéro les systèmes liés aux modes du player.
 
 export function createResetSystem(opts) {
   const {
@@ -19,35 +19,31 @@ export function createResetSystem(opts) {
     getPlayer,
     setPlayer,
     getEnemiesSystem,
+    getModeSystem,
     refreshHud,
   } = opts;
 
   function clearDynamicEntities() {
-    // Ennemis
     while (enemies.length) {
       const enemy = enemies.pop();
       scene.remove(enemy.mesh);
     }
 
-    // Pièces
     while (coins.length) {
       const coin = coins.pop();
       scene.remove(coin.group);
     }
 
-    // Particules (v0.1f)
     const particleSystem = getParticleSystem ? getParticleSystem() : null;
     if (particleSystem) {
       particleSystem.clear();
     } else {
-      // fallback (ancienne structure)
       while (particles.length) {
         const burst = particles.pop();
         for (const p of burst.parts) scene.remove(p.mesh);
       }
     }
 
-    // Murs posés par l'utilisateur
     while (userWalls.length) {
       const wall = userWalls.pop();
       userWallSet.delete(keyForCell(wall.x, wall.z));
@@ -62,11 +58,10 @@ export function createResetSystem(opts) {
     runtime.missionComplete = false;
     runtime.timeElapsed = 0;
     runtime.actionCooldown = 0;
+    runtime.spawnCooldown = 0.4;
 
     const wallsSystem = getWallsSystem ? getWallsSystem() : null;
     if (wallsSystem) wallsSystem.clearLastActionCell();
-
-    runtime.spawnCooldown = 0.4;
 
     const playerSystem = getPlayerSystem ? getPlayerSystem() : null;
     const player = getPlayer ? getPlayer() : null;
@@ -81,10 +76,15 @@ export function createResetSystem(opts) {
       player.lastMove.z = -1;
     }
 
+    const modeSystem = getModeSystem ? getModeSystem() : null;
+    if (modeSystem && typeof modeSystem.reset === 'function') {
+      modeSystem.reset();
+    }
+
     cameraState.ready = false;
 
     const enemiesSystem = getEnemiesSystem ? getEnemiesSystem() : null;
-    for (let i = 0; i < baseEnemies; i++) {
+    for (let i = 0; i < baseEnemies; i += 1) {
       if (enemiesSystem) enemiesSystem.spawnEnemy();
     }
 
