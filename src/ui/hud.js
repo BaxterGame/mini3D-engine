@@ -1,39 +1,25 @@
-// mini-engine v0.1b — HUD et UI
+// mini-engine v0.2a — HUD et UI
+// Ajoute un rappel léger du mode player dans le texte de statut.
 
-/**
- * @param {object} els
- * @param {HTMLElement} els.viewValue
- * @param {HTMLElement} els.projectionValue
- * @param {HTMLElement} els.scoreValue
- * @param {HTMLElement} els.enemyValue
- * @param {HTMLElement} els.wallValue
- * @param {HTMLElement} els.missionValue
- * @param {HTMLElement} els.statusText
- * @param {HTMLButtonElement} els.toggleViewBtn
- * @param {HTMLButtonElement} els.toggleProjectionBtn
- * @param {HTMLButtonElement} els.toggleSandboxBtn
- * @param {HTMLButtonElement} els.orbitLeftBtn
- * @param {HTMLButtonElement} els.orbitRightBtn
- * @param {{ WIN_SCORE: number }} config
- */
 export function createHud(els, config) {
   function syncViewUi(model) {
     const modePrefix = model.worldMode === 'exploration' ? 'Exploration' : 'Mission';
+    const modeSuffix = model.playerModeLabel ? ` • Mode ${model.playerModeLabel}` : '';
 
     if (model.followMode === 'top') {
       els.viewValue.textContent = 'TOP';
       els.viewValue.style.color = '#74f6ff';
-      els.statusText.textContent = `${modePrefix} • Top = lecture claire et déplacement libre`;
+      els.statusText.textContent = `${modePrefix} • Top = lecture claire et déplacement libre${modeSuffix}`;
       els.toggleViewBtn.classList.add('is-active');
     } else if (model.cameraProjectionMode === 'iso') {
       els.viewValue.textContent = 'CAMÉRA ISO';
       els.viewValue.style.color = '#7ab6ff';
-      els.statusText.textContent = `${modePrefix} • Caméra isométrique = lecture douce, style maquette`;
+      els.statusText.textContent = `${modePrefix} • Caméra isométrique = lecture douce, style maquette${modeSuffix}`;
       els.toggleViewBtn.classList.remove('is-active');
     } else {
       els.viewValue.textContent = 'CAMÉRA PERSP';
       els.viewValue.style.color = '#ffd76b';
-      els.statusText.textContent = `${modePrefix} • Caméra perspective = suivi plus immersif`;
+      els.statusText.textContent = `${modePrefix} • Caméra perspective = suivi plus immersif${modeSuffix}`;
       els.toggleViewBtn.classList.remove('is-active');
     }
 

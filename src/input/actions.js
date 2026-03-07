@@ -1,7 +1,6 @@
-// mini-engine v0.1h — actions sémantiques au-dessus du clavier brut
-// Ce module sépare :
-// - l'état physique des touches
-// - les actions gameplay/UI consommées par le reste du code
+// mini-engine v0.2a — actions sémantiques
+// La touche `X` ne pilote plus l'orbite caméra : elle sert au cycle des modes du player.
+// L'orbite droite reste disponible sur `L` et via le bouton UI.
 
 function boolToAxis(positive, negative) {
   return (positive ? 1 : 0) - (negative ? 1 : 0);
@@ -20,12 +19,8 @@ export function createActionController(input) {
       up,
       down,
       x: boolToAxis(right, left),
-      z: boolToAxis(down, up)
+      z: boolToAxis(down, up),
     };
-  }
-
-  function consumeOrbitRight() {
-    return input.consumePress('l') || input.consumePress('x');
   }
 
   return {
@@ -35,11 +30,11 @@ export function createActionController(input) {
       return input.isDown('shift');
     },
 
-    isWallActionHeld() {
+    isPrimaryActionHeld() {
       return input.isDown('space');
     },
 
-    consumeWallActionRelease() {
+    consumePrimaryActionRelease() {
       return input.consumeRelease('space');
     },
 
@@ -63,6 +58,12 @@ export function createActionController(input) {
       return input.consumePress('j');
     },
 
-    consumeOrbitRight
+    consumeOrbitRight() {
+      return input.consumePress('l');
+    },
+
+    consumeNextPlayerMode() {
+      return input.consumePress('x');
+    },
   };
 }
