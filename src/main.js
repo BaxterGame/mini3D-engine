@@ -1,4 +1,4 @@
-// mini-engine v0.1f — refactor: FX extraits (particles)
+// mini-engine v0.1g — refactor: game loop + reset extraits
 // Note: ouvre via un petit serveur local (file:// bloque souvent les modules).
 
 import { BORDER_HALF, INNER_LIMIT, WIN_SCORE, BASE_ENEMIES, CHUNK_SIZE, CHUNK_RADIUS, WALL_HALF } from './config.js';
@@ -16,6 +16,8 @@ import { createPlayerSystem } from './entities/player.js';
 import { createEnemiesSystem } from './entities/enemies.js';
 import { createCoinsSystem } from './entities/coins.js';
 import { createParticleSystem } from './fx/particles.js';
+import { createGameLoop } from './game/gameLoop.js';
+import { createResetSystem } from './game/reset.js';
 
 
 if (location.protocol === 'file:') {
@@ -70,7 +72,6 @@ const errorBox = document.getElementById('error');
     let orthoCamera;
     let activeCamera;
     let clock;
-    let animationId = null;
     let unbindKeyboard = null;
 
     let player;
@@ -80,6 +81,8 @@ const errorBox = document.getElementById('error');
     let enemiesSystem = null;
     let coinsSystem = null;
     let particleSystem = null;
+    let resetSystem = null;
+    let gameLoop = null;
 
     let keys = Object.create(null);
     let prevKeys = Object.create(null);
@@ -90,6 +93,16 @@ const errorBox = document.getElementById('error');
     let missionComplete = false;
     let worldMode = 'mission';
     let cameraController = null;
+
+    // runtime wrapper: permet aux modules (reset/loop) de modifier ces valeurs sans changer le reste du code.
+    const runtime = {
+      get score() { return score; }, set score(v) { score = v; },
+      get missionComplete() { return missionComplete; }, set missionComplete(v) { missionComplete = v; },
+      get timeElapsed() { return timeElapsed; }, set timeElapsed(v) { timeElapsed = v; },
+      get actionCooldown() { return actionCooldown; }, set actionCooldown(v) { actionCooldown = v; },
+      get spawnCooldown() { return spawnCooldown; }, set spawnCooldown(v) { spawnCooldown = v; },
+      get worldMode() { return worldMode; }, set worldMode(v) { worldMode = v; },
+    };
     const { cameraState, enemies, coins, particles, userWalls, userWallSet, gridChunks, shared } = createState(THREE);
 
 
@@ -154,57 +167,6 @@ const errorBox = document.getElementById('error');
       // chunks initialisés par chunkSystem.ensureChunksAround() dans la boucle
     }
 
-    function clearDynamicEntities() {
-      while (enemies.length) {
-        const enemy = enemies.pop();
-        scene.remove(enemy.mesh);
-      }
-      while (coins.length) {
-        const coin = coins.pop();
-        scene.remove(coin.group);
-      }
-      if (particleSystem) {
-        particleSystem.clear();
-      } else {
-        while (particles.length) {
-          const burst = particles.pop();
-          for (const p of burst.parts) scene.remove(p.mesh);
-        }
-      }
-      while (userWalls.length) {
-        const wall = userWalls.pop();
-        userWallSet.delete(keyForCell(wall.x, wall.z));
-        scene.remove(wall.mesh);
-      }
-    }
-
-    function resetGame() {
-  clearDynamicEntities();
-  score = 0;
-  missionComplete = false;
-  timeElapsed = 0;
-  actionCooldown = 0;
-  if (wallsSystem) wallsSystem.clearLastActionCell();
-  spawnCooldown = 0.4;
-
-  if (playerSystem) {
-    playerSystem.reset();
-    player = playerSystem.getPlayer();
-  } else if (player) {
-    player.x = 0;
-    player.z = 0;
-    player.lastMove.x = 0;
-    player.lastMove.z = -1;
-  }
-
-  cameraState.ready = false;
-
-  for (let i = 0; i < BASE_ENEMIES; i++) {
-    if (enemiesSystem) enemiesSystem.spawnEnemy();
-  }
-  refreshHud();
-}
-
     function tryMaintainEnemies(delta) {
       spawnCooldown -= delta;
       if (worldMode === 'exploration') return;
@@ -242,7 +204,7 @@ const errorBox = document.getElementById('error');
       const sandboxPressed = !!keys['m'] && !prevKeys['m'];
       const orbitLeftPressed = !!keys['j'] && !prevKeys['j'];
       const orbitRightPressed = (!!keys['l'] && !prevKeys['l']) || (!!keys['x'] && !prevKeys['x']);
-      if (restartPressed) resetGame();
+      if (restartPressed && resetSystem) resetSystem.resetGame();
       if (viewPressed && cameraController) { cameraController.toggleView(); refreshHud(); }
       if (projectionPressed && cameraController) { cameraController.toggleProjection(); refreshHud(); }
       if (sandboxPressed) toggleWorldMode();
@@ -276,12 +238,6 @@ const errorBox = document.getElementById('error');
 
       renderer.render(scene, activeCamera);
       copyKeyState();
-    }
-
-    function animate() {
-      const delta = Math.min(0.033, clock.getDelta());
-      animationId = requestAnimationFrame(animate);
-      update(delta);
     }
 
     function init() {
@@ -363,12 +319,34 @@ enemiesSystem = createEnemiesSystem({
         });
       });
       unbindKeyboard = bindKeyboard(keys, { onSpaceRelease: () => { if (wallsSystem) wallsSystem.clearLastActionCell(); } });
-      resetGame();
-      animate();
-    }
+      // Reset + loop (v0.1g)
+      resetSystem = createResetSystem({
+        scene,
+        enemies,
+        coins,
+        particles,
+        userWalls,
+        userWallSet,
+        keyForCell,
+        cameraState,
+        baseEnemies: BASE_ENEMIES,
+        runtime,
+        getParticleSystem: () => particleSystem,
+        getWallsSystem: () => wallsSystem,
+        getPlayerSystem: () => playerSystem,
+        getPlayer: () => player,
+        setPlayer: (p) => { player = p; },
+        getEnemiesSystem: () => enemiesSystem,
+        refreshHud,
+      });
+
+      resetSystem.resetGame();
+      gameLoop = createGameLoop({ clock, tick: update });
+      gameLoop.start();
+}
 
     window.addEventListener('beforeunload', () => {
-      if (animationId) cancelAnimationFrame(animationId);
+      if (gameLoop) gameLoop.stop();
       if (unbindKeyboard) unbindKeyboard();
     });
 
