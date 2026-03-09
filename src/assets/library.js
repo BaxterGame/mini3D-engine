@@ -1,6 +1,6 @@
 // mini-engine v0.2b — assets/library
-// Charge une première sélection d'assets depuis /assets et fournit
-// des clones prêts à l'emploi avec fallback silencieux si un fichier manque.
+// Charge une première sélection d'assets depuis /assets
+// et fournit des clones prêts à l'emploi avec fallback silencieux si un fichier manque.
 
 const PLAYER_MODE_BINDINGS = {
   wall: {
@@ -39,15 +39,27 @@ function applyTransform(object, binding = {}) {
   const { scale, rotation, position } = binding;
 
   if (Array.isArray(scale)) {
-    object.scale.set(scale[0] ?? 1, scale[1] ?? scale[0] ?? 1, scale[2] ?? scale[0] ?? 1);
+    object.scale.set(
+      scale[0] ?? 1,
+      scale[1] ?? scale[0] ?? 1,
+      scale[2] ?? scale[0] ?? 1
+    );
   }
 
   if (Array.isArray(rotation)) {
-    object.rotation.set(rotation[0] ?? 0, rotation[1] ?? 0, rotation[2] ?? 0);
+    object.rotation.set(
+      rotation[0] ?? 0,
+      rotation[1] ?? 0,
+      rotation[2] ?? 0
+    );
   }
 
   if (Array.isArray(position)) {
-    object.position.set(position[0] ?? 0, position[1] ?? 0, position[2] ?? 0);
+    object.position.set(
+      position[0] ?? 0,
+      position[1] ?? 0,
+      position[2] ?? 0
+    );
   }
 
   return object;
@@ -57,6 +69,7 @@ function cloneRenderable(source) {
   if (!source) return null;
 
   const clone = source.clone(true);
+
   clone.traverse((child) => {
     child.castShadow = true;
     child.receiveShadow = true;
@@ -65,7 +78,9 @@ function cloneRenderable(source) {
     if (!material) return;
 
     if (Array.isArray(material)) {
-      child.material = material.map((mat) => (mat && typeof mat.clone === 'function' ? mat.clone() : mat));
+      child.material = material.map((mat) =>
+        mat && typeof mat.clone === 'function' ? mat.clone() : mat
+      );
     } else if (typeof material.clone === 'function') {
       child.material = material.clone();
     }
@@ -76,15 +91,16 @@ function cloneRenderable(source) {
 
 function resolveIndex(index, listLength) {
   if (!index) return 0;
+
   const value = Number.parseInt(index, 10);
   if (Number.isNaN(value)) return 0;
+
   return value >= 0 ? value : listLength + value;
 }
 
 function parseObjGeometry(text, THREE) {
   const positions = [[0, 0, 0]];
   const uvs = [[0, 0]];
-
   const outPositions = [];
   const outUvs = [];
 
@@ -92,6 +108,7 @@ function parseObjGeometry(text, THREE) {
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
+
     if (!line || line.startsWith('#')) continue;
 
     if (line.startsWith('v ')) {
@@ -124,6 +141,7 @@ function parseObjGeometry(text, THREE) {
 
     for (let i = 1; i < refs.length - 1; i += 1) {
       const tri = [refs[0], refs[i], refs[i + 1]];
+
       for (const ref of tri) {
         const position = positions[ref.vIndex] || positions[0];
         const uv = uvs[ref.vtIndex] || uvs[0];
@@ -135,7 +153,10 @@ function parseObjGeometry(text, THREE) {
   }
 
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(outPositions, 3));
+  geometry.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute(outPositions, 3)
+  );
 
   if (outUvs.length > 0) {
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(outUvs, 2));
@@ -143,21 +164,42 @@ function parseObjGeometry(text, THREE) {
 
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
+
   return geometry;
 }
 
 function inferMaterialOptions(entry, texture) {
+  const isWall = entry.id === 'wall-block';
   const isAqua = entry.id === 'aqua-orb';
   const isProjectile = entry.id === 'projectile-shard';
   const isVehicle = entry.id === 'vehicle-kart';
 
+  if (isWall) {
+    return {
+      map: texture || null,
+      color: 0xffffff,
+
+      transparent: false,
+      opacity: 0.0,
+
+      roughness: 0.0,
+      metalness: 0.0,
+
+      emissive: 0x00ffff,
+      emissiveIntensity: 0.3,
+    };
+  }
+
   return {
     map: texture || null,
     color: 0xffffff,
+
     transparent: isAqua,
     opacity: isAqua ? 0.82 : 1,
+
     roughness: isAqua ? 0.1 : 0.65,
     metalness: isVehicle ? 0.12 : 0.04,
+
     emissive: isProjectile ? 0x220000 : isAqua ? 0x0b2344 : 0x000000,
     emissiveIntensity: isProjectile ? 0.45 : isAqua ? 0.18 : 0,
   };
@@ -175,6 +217,7 @@ export function createAssetLibrary({
   async function loadTexture(url) {
     const loader = new THREE.TextureLoader();
     const texture = await loader.loadAsync(url);
+
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.NearestMipmapNearestFilter;
 
@@ -190,6 +233,7 @@ export function createAssetLibrary({
     if (loadedAssets.has(entry.id)) return loadedAssets.get(entry.id);
 
     const objUrl = `${basePath}${entry.mesh}`;
+
     const objText = await fetch(objUrl).then((response) => {
       if (!response.ok) {
         throw new Error(`OBJ introuvable: ${objUrl}`);
@@ -208,7 +252,10 @@ export function createAssetLibrary({
       }
     }
 
-    const material = new THREE.MeshStandardMaterial(inferMaterialOptions(entry, texture));
+    const material = new THREE.MeshStandardMaterial(
+      inferMaterialOptions(entry, texture)
+    );
+
     const mesh = new THREE.Mesh(geometry, material);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
@@ -233,12 +280,16 @@ export function createAssetLibrary({
         return response.json();
       });
     } catch (error) {
-      console.warn('[assets] impossible de charger le manifest, fallback géométrique conservé.', error);
+      console.warn(
+        '[assets] impossible de charger le manifest, fallback géométrique conservé.',
+        error
+      );
       isReady = false;
       return false;
     }
 
     const assets = Array.isArray(manifest?.assets) ? manifest.assets : [];
+
     for (const entry of assets) {
       if (entry?.id) {
         manifestEntries.set(entry.id, entry);
@@ -255,12 +306,15 @@ export function createAssetLibrary({
     ]);
 
     const jobs = [];
+
     for (const assetId of idsToLoad) {
       const entry = manifestEntries.get(assetId);
+
       if (!entry) {
         console.warn(`[assets] entrée absente du manifest: ${assetId}`);
         continue;
       }
+
       jobs.push(loadEntry(entry));
     }
 
@@ -268,7 +322,10 @@ export function createAssetLibrary({
       await Promise.all(jobs);
       isReady = loadedAssets.size > 0;
     } catch (error) {
-      console.warn('[assets] chargement partiel, fallback géométrique conservé.', error);
+      console.warn(
+        '[assets] chargement partiel, fallback géométrique conservé.',
+        error
+      );
       isReady = loadedAssets.size > 0;
     }
 
@@ -290,6 +347,7 @@ export function createAssetLibrary({
   function createPlayerModeVisual(mode) {
     const binding = PLAYER_MODE_BINDINGS[mode];
     if (!binding) return null;
+
     return createAssetInstance(binding.assetId, binding);
   }
 
