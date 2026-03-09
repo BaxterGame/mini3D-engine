@@ -1,33 +1,40 @@
-// mini-engine v0.2a — HUD et UI
-// Ajoute un rappel léger du mode player dans le texte de statut.
+// mini-engine v0.2d — HUD et UI
+// La caméra utilise désormais un cycle unique sur `C`.
 
 export function createHud(els, config) {
   function syncViewUi(model) {
     const modePrefix = model.worldMode === 'exploration' ? 'Exploration' : 'Mission';
     const modeSuffix = model.playerModeLabel ? ` • Mode ${model.playerModeLabel}` : '';
+    const cameraMode = model.cameraMode || model.cameraProjectionMode || 'top';
 
-    if (model.followMode === 'top') {
-      els.viewValue.textContent = 'TOP';
+    els.toggleViewBtn.textContent = 'Cycle caméra (C)';
+    els.toggleViewBtn.classList.add('is-active');
+
+    if (els.toggleProjectionBtn) {
+      els.toggleProjectionBtn.style.display = 'none';
+      els.toggleProjectionBtn.classList.remove('is-active');
+    }
+
+    if (cameraMode === 'top') {
+      els.viewValue.textContent = 'TOP 2D';
       els.viewValue.style.color = '#74f6ff';
-      els.statusText.textContent = `${modePrefix} • Top = lecture claire et déplacement libre${modeSuffix}`;
-      els.toggleViewBtn.classList.add('is-active');
-    } else if (model.cameraProjectionMode === 'iso') {
+      els.projectionValue.textContent = '2D';
+      els.statusText.textContent = `${modePrefix} • Top = lecture claire et navigation libre${modeSuffix}`;
+    } else if (cameraMode === 'iso') {
       els.viewValue.textContent = 'CAMÉRA ISO';
       els.viewValue.style.color = '#7ab6ff';
-      els.statusText.textContent = `${modePrefix} • Caméra isométrique = lecture douce, style maquette${modeSuffix}`;
-      els.toggleViewBtn.classList.remove('is-active');
+      els.projectionValue.textContent = 'ISOMÉTRIQUE';
+      els.statusText.textContent = `${modePrefix} • Isométrique = lecture 3D stable et repères conservés${modeSuffix}`;
     } else {
       els.viewValue.textContent = 'CAMÉRA PERSP';
       els.viewValue.style.color = '#ffd76b';
-      els.statusText.textContent = `${modePrefix} • Caméra perspective = suivi plus immersif${modeSuffix}`;
-      els.toggleViewBtn.classList.remove('is-active');
+      els.projectionValue.textContent = 'PERSPECTIVE';
+      els.statusText.textContent = `${modePrefix} • Perspective = déplacement aligné à l’écran pour moins se perdre${modeSuffix}`;
     }
 
-    els.projectionValue.textContent = model.cameraProjectionMode === 'iso' ? 'ISOMÉTRIQUE' : 'PERSPECTIVE';
-    els.toggleProjectionBtn.classList.toggle('is-active', model.cameraProjectionMode === 'iso');
     els.toggleSandboxBtn.classList.toggle('is-active', model.worldMode === 'exploration');
-    els.orbitLeftBtn.classList.toggle('is-active', model.followMode === 'camera');
-    els.orbitRightBtn.classList.toggle('is-active', model.followMode === 'camera');
+    els.orbitLeftBtn.classList.toggle('is-active', cameraMode !== 'top');
+    els.orbitRightBtn.classList.toggle('is-active', cameraMode !== 'top');
   }
 
   function refresh(model) {

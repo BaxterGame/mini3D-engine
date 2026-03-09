@@ -1,6 +1,7 @@
-// mini-engine v0.2a — actions sémantiques
-// La touche `X` ne pilote plus l'orbite caméra : elle sert au cycle des modes du player.
-// L'orbite droite reste disponible sur `L` et via le bouton UI.
+// mini-engine v0.2d — actions sémantiques
+// La caméra utilise maintenant un cycle unique sur `C` :
+// top 2D -> isométrique -> perspective -> top 2D.
+// `X` reste dédié au cycle des modes du player.
 
 function boolToAxis(positive, negative) {
   return (positive ? 1 : 0) - (negative ? 1 : 0);
@@ -42,11 +43,7 @@ export function createActionController(input) {
       return input.consumePress('r');
     },
 
-    consumeToggleView() {
-      return input.consumePress('v');
-    },
-
-    consumeToggleProjection() {
+    consumeCycleCamera() {
       return input.consumePress('c');
     },
 

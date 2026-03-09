@@ -60,6 +60,7 @@ const THREE = window.THREE;
   const wallValue = document.getElementById('wallValue');
   const missionValue = document.getElementById('missionValue');
   const statusText = document.getElementById('status');
+  const hintText = document.getElementById('hint');
   const toggleViewBtn = document.getElementById('toggleViewBtn');
   const toggleProjectionBtn = document.getElementById('toggleProjectionBtn');
   const toggleSandboxBtn = document.getElementById('toggleSandboxBtn');
@@ -269,7 +270,8 @@ const THREE = window.THREE;
       worldMode,
       missionComplete,
       followMode: cameraController ? cameraController.getFollowMode() : 'top',
-      cameraProjectionMode: cameraController ? cameraController.getProjectionMode() : 'iso',
+      cameraProjectionMode: cameraController ? cameraController.getProjectionMode() : 'top',
+      cameraMode: cameraController ? cameraController.getCameraMode() : 'top',
       playerModeLabel: modeSystem ? modeSystem.getCurrentModeLabel() : 'WALL',
     });
   }
@@ -289,13 +291,8 @@ const THREE = window.THREE;
       resetSystem.resetGame();
     }
 
-    if (actions.consumeToggleView() && cameraController) {
-      cameraController.toggleView();
-      refreshHud();
-    }
-
-    if (actions.consumeToggleProjection() && cameraController) {
-      cameraController.toggleProjection();
+    if (actions.consumeCycleCamera() && cameraController) {
+      cameraController.cycleMode();
       refreshHud();
     }
 
@@ -472,15 +469,15 @@ const THREE = window.THREE;
 
     toggleViewBtn.addEventListener('click', () => {
       if (!cameraController) return;
-      cameraController.toggleView();
+      cameraController.cycleMode();
       refreshHud();
     });
 
-    toggleProjectionBtn.addEventListener('click', () => {
-      if (!cameraController) return;
-      cameraController.toggleProjection();
-      refreshHud();
-    });
+    toggleProjectionBtn.style.display = 'none';
+    if (hintText) {
+      hintText.textContent =
+        'Déplacement : ZQSD / WASD / flèches • Espace = action contextuelle • C = cycle 2D / isométrique / perspective • M = mission/exploration • J = ↺ 45° • L = ↻ 45° • X = mode player • R = relancer';
+    }
 
     toggleSandboxBtn.addEventListener('click', toggleWorldMode);
 
