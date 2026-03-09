@@ -1,4 +1,4 @@
-// mini-engine v0.2b — feature: integrate assets into engine
+// mini-engine v0.2c — feature: adaptive territory background plane
 // Note: ouvre via un petit serveur local (file:// bloque souvent les modules).
 
 import {
@@ -206,6 +206,20 @@ const THREE = window.THREE;
     playerPulseLight = new THREE.PointLight(0x65f6ff, 1.15, 34, 2);
     playerPulseLight.position.set(0, 8, 0);
     scene.add(playerPulseLight);
+
+    const territorySize = Math.max(1, BORDER_HALF * 2);
+    const territoryPlane = new THREE.Mesh(
+      new THREE.PlaneGeometry(territorySize, territorySize),
+      new THREE.MeshStandardMaterial({
+        color: 0x85817b,
+        roughness: 0.98,
+        metalness: 0.02,
+      }),
+    );
+    territoryPlane.rotation.x = -Math.PI / 2;
+    territoryPlane.position.set(0, 0.002, 0);
+    territoryPlane.receiveShadow = true;
+    scene.add(territoryPlane);
 
     const stars = new THREE.Group();
     const starGeo = new THREE.SphereGeometry(0.05, 5, 5);
