@@ -1,6 +1,5 @@
-// mini-engine v0.2b — entities/player
-// Le déplacement reste stable, mais la forme du player peut maintenant
-// venir de la librairie d'assets quand elle est disponible.
+// mini-engine v0.2e — entities/player
+// Déplacement reprojeté selon la caméra en 3D, sans perdre les assets du player.
 
 import { clamp, normalize2D } from '../utils/math.js';
 import { INNER_LIMIT as DEFAULT_INNER_LIMIT } from '../config.js';
@@ -23,6 +22,25 @@ function disposeObject3D(object) {
       material.dispose();
     }
   });
+}
+
+function projectMovementToCamera(movement, cameraController) {
+  if (!cameraController || cameraController.getFollowMode() === 'top') {
+    return { x: movement.x, z: movement.z };
+  }
+
+  const basis = cameraController.getMovementBasis?.();
+  if (!basis?.right || !basis?.forward) {
+    return { x: movement.x, z: movement.z };
+  }
+
+  const horizontal = movement.x;
+  const vertical = -movement.z;
+
+  return {
+    x: basis.right.x * horizontal + basis.forward.x * vertical,
+    z: basis.right.z * horizontal + basis.forward.z * vertical,
+  };
 }
 
 export function createPlayerSystem({
@@ -135,9 +153,12 @@ export function createPlayerSystem({
   function update(delta) {
     if (!player) return;
 
-    const movement = actions ? actions.getMovementIntent() : getLegacyMovementIntent();
-    let moveX = movement.x;
-    let moveZ = movement.z;
+    const movementIntent = actions ? actions.getMovementIntent() : getLegacyMovementIntent();
+    const cameraController = getCameraController ? getCameraController() : null;
+    const projectedMovement = projectMovementToCamera(movementIntent, cameraController);
+
+    let moveX = projectedMovement.x;
+    let moveZ = projectedMovement.z;
 
     if (moveX !== 0 || moveZ !== 0) {
       const norm = normalize2D({ x: moveX, z: moveZ });
@@ -147,15 +168,6 @@ export function createPlayerSystem({
       player.lastMove.x = moveX;
       player.lastMove.z = moveZ;
       player.yaw = Math.atan2(moveX, moveZ);
-
-      const cameraController = getCameraController ? getCameraController() : null;
-      if (
-        cameraController &&
-        cameraController.getFollowMode() === 'camera' &&
-        cameraController.getOrbitSteps() !== 0
-      ) {
-        cameraController.resetOrbit();
-      }
     } else {
       moveX = 0;
       moveZ = 0;
