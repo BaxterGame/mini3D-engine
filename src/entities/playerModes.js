@@ -1,10 +1,6 @@
-// mini-engine v0.2a — entities/playerModes
-// Réintroduit un système de modes simple et extensible pour le player.
-// Portée volontairement cadrée :
-// - Wall : conserve l'action existante
-// - Projectile : tir continu simple
-// - Aqua : stub de placement sur grille
-// - Vehicle : variation de vitesse / visuel
+// mini-engine v0.2b — entities/playerModes
+// Les modes restent simples, mais peuvent maintenant utiliser des assets
+// chargés depuis la librairie locale pour remplacer une partie des placeholders.
 
 export const PLAYER_MODE_ORDER = ['wall', 'projectile', 'aqua', 'vehicle'];
 
@@ -177,25 +173,6 @@ function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
 
-function disposeObject3D(object) {
-  if (!object) return;
-
-  object.traverse((child) => {
-    if (child.geometry && typeof child.geometry.dispose === 'function') {
-      child.geometry.dispose();
-    }
-
-    const { material } = child;
-    if (Array.isArray(material)) {
-      for (const mat of material) {
-        if (mat && typeof mat.dispose === 'function') mat.dispose();
-      }
-    } else if (material && typeof material.dispose === 'function') {
-      material.dispose();
-    }
-  });
-}
-
 function keyForCell(cellX, cellZ) {
   return `${cellX}|${cellZ}`;
 }
@@ -206,6 +183,40 @@ function getDirectionFromPlayer(player) {
   const length = Math.hypot(x, z) || 1;
 
   return { x: x / length, z: z / length };
+}
+
+function createFallbackProjectileMesh(THREE) {
+  const mesh = new THREE.Mesh(
+    new THREE.TetrahedronGeometry(0.24, 0),
+    new THREE.MeshStandardMaterial({
+      color: 0xff7474,
+      emissive: 0xff3434,
+      emissiveIntensity: 0.72,
+      roughness: 0.3,
+      metalness: 0.08,
+      flatShading: true,
+    }),
+  );
+  mesh.castShadow = true;
+  return mesh;
+}
+
+function createFallbackAquaMesh(THREE) {
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.5, 16, 12),
+    new THREE.MeshStandardMaterial({
+      color: 0x5ebeff,
+      emissive: 0x1c7cff,
+      emissiveIntensity: 0.32,
+      roughness: 0.12,
+      metalness: 0.06,
+      transparent: true,
+      opacity: 0.8,
+    }),
+  );
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  return mesh;
 }
 
 export function getPlayerModeDef(mode) {
@@ -227,6 +238,7 @@ export function createPlayerModesSystem({
   getPlayerSystem,
   getWallsSystem,
   getContextProfile,
+  assetLibrary = null,
 }) {
   let currentMode = 'wall';
   let projectileCooldown = 0;
@@ -236,26 +248,21 @@ export function createPlayerModesSystem({
   const aquaNodes = [];
   const aquaNodeSet = new Set();
 
-  const projectileGeometry = new THREE.TetrahedronGeometry(0.24, 0);
-  const projectileMaterial = new THREE.MeshStandardMaterial({
-    color: 0xff7474,
-    emissive: 0xff3434,
-    emissiveIntensity: 0.72,
-    roughness: 0.3,
-    metalness: 0.08,
-    flatShading: true,
-  });
+  function createProjectileVisual() {
+    if (assetLibrary && typeof assetLibrary.createProjectileVisual === 'function') {
+      const visual = assetLibrary.createProjectileVisual();
+      if (visual) return visual;
+    }
+    return createFallbackProjectileMesh(THREE);
+  }
 
-  const aquaGeometry = new THREE.SphereGeometry(0.5, 16, 12);
-  const aquaMaterial = new THREE.MeshStandardMaterial({
-    color: 0x5ebeff,
-    emissive: 0x1c7cff,
-    emissiveIntensity: 0.32,
-    roughness: 0.12,
-    metalness: 0.06,
-    transparent: true,
-    opacity: 0.8,
-  });
+  function createAquaVisual() {
+    if (assetLibrary && typeof assetLibrary.createAquaNodeVisual === 'function') {
+      const visual = assetLibrary.createAquaNodeVisual();
+      if (visual) return visual;
+    }
+    return createFallbackAquaMesh(THREE);
+  }
 
   function getCurrentMode() {
     return currentMode;
@@ -370,8 +377,7 @@ export function createPlayerModesSystem({
     projectileCooldown = 0.16;
 
     const direction = getDirectionFromPlayer(player);
-    const mesh = new THREE.Mesh(projectileGeometry, projectileMaterial.clone());
-    mesh.castShadow = true;
+    const mesh = createProjectileVisual();
     mesh.rotation.y = Math.atan2(direction.x, direction.z);
 
     const startX = player.x + direction.x * 0.92;
@@ -411,9 +417,7 @@ export function createPlayerModesSystem({
 
     if (aquaNodeSet.has(key)) return false;
 
-    const mesh = new THREE.Mesh(aquaGeometry, aquaMaterial.clone());
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    const mesh = createAquaVisual();
     mesh.position.set(cellX, 0.5, cellZ);
 
     scene.add(mesh);

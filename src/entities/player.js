@@ -1,6 +1,6 @@
-// mini-engine v0.2a — entities/player
-// Le player garde sa logique de déplacement stable,
-// mais expose maintenant un mode visuel + un multiplicateur de vitesse.
+// mini-engine v0.2b — entities/player
+// Le déplacement reste stable, mais la forme du player peut maintenant
+// venir de la librairie d'assets quand elle est disponible.
 
 import { clamp, normalize2D } from '../utils/math.js';
 import { INNER_LIMIT as DEFAULT_INNER_LIMIT } from '../config.js';
@@ -33,6 +33,7 @@ export function createPlayerSystem({
   collidesAtPlayer,
   getTimeElapsed,
   getCameraController,
+  assetLibrary = null,
   INNER_LIMIT = DEFAULT_INNER_LIMIT,
 }) {
   let player = null;
@@ -57,9 +58,17 @@ export function createPlayerSystem({
     return getPlayerModeDef(player.mode).speedMultiplier ?? 1;
   }
 
+  function createCoreVisual(mode, def) {
+    if (assetLibrary && typeof assetLibrary.createPlayerModeVisual === 'function') {
+      const visual = assetLibrary.createPlayerModeVisual(mode);
+      if (visual) return visual;
+    }
+
+    return def.createCore(THREE);
+  }
+
   function rebuildVisualForMode(mode) {
     const def = getPlayerModeDef(mode);
-
     if (!group) return;
 
     if (core) {
@@ -74,7 +83,7 @@ export function createPlayerSystem({
       halo = null;
     }
 
-    core = def.createCore(THREE);
+    core = createCoreVisual(mode, def);
     halo = def.createHalo(THREE);
 
     if (core) group.add(core);

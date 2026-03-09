@@ -11,7 +11,7 @@
     "mesh": "mesh_<family>_<name>_<level>_v001.obj",
     "texture": "tex_<family>_<name>_<size>_v001.png"
   },
-  "test_assets": [
+  "assets": [
     {
       "id": "wall-block",
       "type": "mesh+texture",

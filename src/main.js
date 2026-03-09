@@ -1,4 +1,4 @@
-// mini-engine v0.2a — feature: player modes
+// mini-engine v0.2b — feature: integrate assets into engine
 // Note: ouvre via un petit serveur local (file:// bloque souvent les modules).
 
 import {
@@ -26,6 +26,7 @@ import { createEnemiesSystem } from './entities/enemies.js';
 import { createCoinsSystem } from './entities/coins.js';
 import { createParticleSystem } from './fx/particles.js';
 import { createPlayerModesSystem } from './entities/playerModes.js';
+import { createAssetLibrary } from './assets/library.js';
 import { createGameLoop } from './game/gameLoop.js';
 import { createResetSystem } from './game/reset.js';
 
@@ -103,6 +104,7 @@ const THREE = window.THREE;
   let cameraController = null;
   let chunkSystem = null;
   let wallsSystem = null;
+  let assetLibrary = null;
 
   const rawInput = createInputState();
   const input = createInputController(rawInput);
@@ -168,9 +170,6 @@ const THREE = window.THREE;
   const createWallMesh = createWallMeshFactory({ THREE, shared });
 
   function getModeContextProfile() {
-    // Hook minimal de "contexte" :
-    // - mission = combat (Projectile dispo)
-    // - exploration = travel (Vehicle dispo)
     return worldMode === 'exploration' ? 'travel' : 'combat';
   }
 
@@ -341,9 +340,22 @@ const THREE = window.THREE;
     input.endFrame();
   }
 
-  function init() {
+  async function init() {
     renderer = createRenderer(THREE, document.getElementById('app'));
     makeScene();
+
+    assetLibrary = createAssetLibrary({
+      THREE,
+      manifestUrl: './assets/manifest.json',
+      basePath: './assets/',
+    });
+
+    try {
+      await assetLibrary.load();
+      console.info('[assets] intégrés:', assetLibrary.getLoadedAssetIds().join(', '));
+    } catch (error) {
+      console.warn('[assets] fallback géométrique conservé.', error);
+    }
 
     playerSystem = createPlayerSystem({
       THREE,
@@ -352,6 +364,7 @@ const THREE = window.THREE;
       collidesAtPlayer,
       getTimeElapsed: () => timeElapsed,
       getCameraController: () => cameraController,
+      assetLibrary,
       INNER_LIMIT,
     });
 
@@ -429,6 +442,7 @@ const THREE = window.THREE;
       getPlayerSystem: () => playerSystem,
       getWallsSystem: () => wallsSystem,
       getContextProfile: getModeContextProfile,
+      assetLibrary,
     });
 
     cameraController = createCameraController({
@@ -515,5 +529,9 @@ const THREE = window.THREE;
     if (unbindKeyboard) unbindKeyboard();
   });
 
-  init();
+  init().catch((error) => {
+    console.error(error);
+    errorBox.style.display = 'block';
+    errorBox.innerHTML = 'Erreur au démarrage du moteur. Voir la console pour le détail.';
+  });
 })();
