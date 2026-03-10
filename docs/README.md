@@ -26,9 +26,18 @@ Exemples :
 - Meshes : low poly, lecture de silhouette prioritaire
 - Triangle budget cible : **8 à 64 tris**
 - Budget toléré pour tests : **jusqu'à 128 tris**
-- Textures : **256x256 max**
 - Pas de normal map / roughness / metalness à ce stade
 - Préférer des surfaces lisibles, contrastées, peu détaillées
+
+## Contraintes textures
+
+- texture simple par asset : cible par défaut `256x256`
+- atlas partagée : autorisée jusqu’à `2048x2048` si elle mutualise plusieurs assets
+- privilégier les textures légères, lisibles et réutilisables
+- éviter la multiplication de petites textures isolées si une atlas cohérente suffit
+- format recommandé :
+  - `PNG` pour les textures stylisées, nettes, avec alpha ou motifs graphiques
+  - `JPG` à réserver aux cas sans alpha et sans besoin de contours propres
 
 ## Direction visuelle
 - formes simples, lisibles à distance
