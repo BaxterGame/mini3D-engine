@@ -1,9 +1,9 @@
-// mini-engine v0.1h — input clavier clarifié
-// Distinction explicite entre :
-// - touche maintenue (`down`)
-// - touche pressée ce frame (`pressed`)
-// - touche relâchée ce frame (`released`)
-// Le module reste volontairement léger et sans dépendance gameplay.
+// mini-engine v0.2f — input clavier clarifié
+// Mapping recentré sur la tâche #38 :
+// - WASD = déplacement
+// - Q = cycle des modes joueur
+// - E = inventaire (placeholder UI)
+// - flèches = caméra (zoom / rotation)
 
 const HANDLED_KEYS = new Set([
   'arrowup',
@@ -11,11 +11,20 @@ const HANDLED_KEYS = new Set([
   'arrowleft',
   'arrowright',
   'space',
-  'w', 'a', 's', 'd',
-  'z', 'q',
+  'w',
+  'a',
+  's',
+  'd',
+  'q',
+  'e',
   'shift',
-  'r', 'v', 'c', 'm',
-  'j', 'l', 'x'
+  'r',
+  'v',
+  'c',
+  'm',
+  'j',
+  'l',
+  'x',
 ]);
 
 function normalizeKey(event) {
@@ -42,7 +51,7 @@ export function createInputState() {
   return {
     down: Object.create(null),
     pressed: Object.create(null),
-    released: Object.create(null)
+    released: Object.create(null),
   };
 }
 
@@ -82,7 +91,7 @@ export function createInputController(inputState) {
     wasReleased,
     consumePress,
     consumeRelease,
-    endFrame
+    endFrame,
   };
 }
 

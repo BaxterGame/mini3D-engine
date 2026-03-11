@@ -1,12 +1,19 @@
-// mini-engine v0.2e — caméra simplifiée
-// Cycle unique sur `C` : top 2D -> isométrique -> perspective.
-// Orbit à 45° et perspective stabilisée pour éviter l'effet "tourner en rond".
+// mini-engine v0.2f — caméra simplifiée + zoom clavier / molette
+// Cycle caméra conservé sur `C` / bouton UI.
+// Rotation : pas de 45°.
+// Zoom : flèche haut / bas + molette souris.
 
 import { rotateVector } from '../utils/math.js';
 import { setOrthoSize } from './renderer.js';
 
 const CAMERA_MODE_ORDER = ['top', 'iso', 'perspective'];
 const ORBIT_STEP_ANGLE = Math.PI / 4;
+const MIN_ZOOM_LEVEL = -4;
+const MAX_ZOOM_LEVEL = 5;
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
 
 function normalize2D(x, z) {
   const length = Math.hypot(x, z) || 1;
@@ -24,11 +31,24 @@ function basisFromLook(pos, look) {
   };
 }
 
+function getTopOrthoSize(zoomLevel) {
+  return clamp(25 - zoomLevel * 2.1, 11, 34);
+}
+
+function getIsoOrthoSize(zoomLevel) {
+  return clamp(20 - zoomLevel * 1.7, 10, 28);
+}
+
+function getPerspectiveDistanceScale(zoomLevel) {
+  return clamp(1 - zoomLevel * 0.09, 0.56, 1.6);
+}
+
 export function createCameraController({ THREE, orthoCamera, perspectiveCamera, cameraState, playerPulseLight }) {
   let cameraMode = 'top';
   let orbitSteps = 0;
   let orbitAngle = 0;
   let orthoSize = 22;
+  let zoomLevel = 0;
   let movementBasis = {
     forward: { x: 0, z: -1 },
     right: { x: 1, z: 0 },
@@ -54,6 +74,10 @@ export function createCameraController({ THREE, orthoCamera, perspectiveCamera, 
     return orthoSize;
   }
 
+  function getZoomLevel() {
+    return zoomLevel;
+  }
+
   function getMovementBasis() {
     return movementBasis;
   }
@@ -68,8 +92,22 @@ export function createCameraController({ THREE, orthoCamera, perspectiveCamera, 
     orbitSteps += step;
   }
 
+  function zoomBy(step) {
+    zoomLevel = clamp(zoomLevel + step, MIN_ZOOM_LEVEL, MAX_ZOOM_LEVEL);
+    return zoomLevel;
+  }
+
+  function zoomFromWheel(deltaY) {
+    if (deltaY === 0) return zoomLevel;
+    return zoomBy(deltaY < 0 ? 1 : -1);
+  }
+
   function resetOrbit() {
     orbitSteps = 0;
+  }
+
+  function resetZoom() {
+    zoomLevel = 0;
   }
 
   function update(delta, timeElapsed, player) {
@@ -82,12 +120,12 @@ export function createCameraController({ THREE, orthoCamera, perspectiveCamera, 
     let desiredPos;
     let desiredLook;
     let nextCamera;
-    let modeKey = cameraMode;
+    let modeKey = `${cameraMode}-${orbitSteps}-${zoomLevel}`;
 
     if (cameraMode === 'top') {
       nextCamera = orthoCamera;
       orthoCamera.up.set(0, 0, -1);
-      orthoSize = 25;
+      orthoSize = getTopOrthoSize(zoomLevel);
       setOrthoSize(orthoCamera, orthoSize);
 
       desiredPos = new THREE.Vector3(player.x, 46, player.z + 0.001);
@@ -99,26 +137,30 @@ export function createCameraController({ THREE, orthoCamera, perspectiveCamera, 
     } else if (cameraMode === 'iso') {
       nextCamera = orthoCamera;
       orthoCamera.up.set(0, 1, 0);
-      orthoSize = 20;
+      orthoSize = getIsoOrthoSize(zoomLevel);
       setOrthoSize(orthoCamera, orthoSize);
 
-      const isoOffset = rotateVector(18, 18, orbitAngle);
-      desiredPos = new THREE.Vector3(player.x + isoOffset.x, 18, player.z + isoOffset.z);
+      const isoDistanceScale = clamp(1 - zoomLevel * 0.05, 0.72, 1.3);
+      const isoOffset = rotateVector(18 * isoDistanceScale, 18 * isoDistanceScale, orbitAngle);
+      const isoHeight = clamp(18 * isoDistanceScale, 12.5, 24);
+
+      desiredPos = new THREE.Vector3(player.x + isoOffset.x, isoHeight, player.z + isoOffset.z);
       desiredLook = new THREE.Vector3(player.x, 0.7, player.z);
       movementBasis = basisFromLook(desiredPos, desiredLook);
-      modeKey = `${cameraMode}-${orbitSteps}`;
     } else {
       nextCamera = perspectiveCamera;
 
-      const perspectiveOffset = rotateVector(10.5, 12.5, orbitAngle);
+      const distanceScale = getPerspectiveDistanceScale(zoomLevel);
+      const perspectiveOffset = rotateVector(10.5 * distanceScale, 12.5 * distanceScale, orbitAngle);
+      const perspectiveHeight = clamp(9.25 * distanceScale, 5.4, 15.5);
+
       desiredPos = new THREE.Vector3(
         player.x + perspectiveOffset.x,
-        9.25,
+        perspectiveHeight,
         player.z + perspectiveOffset.z,
       );
       desiredLook = new THREE.Vector3(player.x, 1.05, player.z);
       movementBasis = basisFromLook(desiredPos, desiredLook);
-      modeKey = `${cameraMode}-${orbitSteps}`;
     }
 
     if (!cameraState.ready || cameraState.key !== modeKey) {
@@ -151,12 +193,16 @@ export function createCameraController({ THREE, orthoCamera, perspectiveCamera, 
     update,
     cycleMode,
     rotateOrbit,
+    zoomBy,
+    zoomFromWheel,
     resetOrbit,
+    resetZoom,
     getCameraMode,
     getFollowMode,
     getProjectionMode,
     getOrbitSteps,
     getOrthoSize,
+    getZoomLevel,
     getMovementBasis,
   };
 }

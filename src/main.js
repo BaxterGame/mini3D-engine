@@ -61,6 +61,10 @@ const THREE = window.THREE;
   const missionValue = document.getElementById('missionValue');
   const statusText = document.getElementById('status');
   const hintText = document.getElementById('hint');
+  const inventoryPanel = document.getElementById('inventoryPanel');
+  const inventoryModeValue = document.getElementById('inventoryModeValue');
+  const inventoryCloseBtn = document.getElementById('inventoryCloseBtn');
+  const inventoryChips = Array.from(document.querySelectorAll('[data-inventory-mode]'));
   const toggleViewBtn = document.getElementById('toggleViewBtn');
   const toggleProjectionBtn = document.getElementById('toggleProjectionBtn');
   const toggleSandboxBtn = document.getElementById('toggleSandboxBtn');
@@ -117,6 +121,8 @@ const THREE = window.THREE;
   let score = 0;
   let missionComplete = false;
   let worldMode = 'mission';
+  let inventoryOpen = false;
+  let pendingWheelZoomSteps = 0;
 
   const runtime = {
     get score() {
@@ -273,7 +279,35 @@ const THREE = window.THREE;
       cameraProjectionMode: cameraController ? cameraController.getProjectionMode() : 'top',
       cameraMode: cameraController ? cameraController.getCameraMode() : 'top',
       playerModeLabel: modeSystem ? modeSystem.getCurrentModeLabel() : 'WALL',
+      inventoryOpen,
     });
+  }
+
+  function updateInventoryUi() {
+    if (!inventoryPanel) return;
+
+    inventoryPanel.classList.toggle('is-open', inventoryOpen);
+    inventoryPanel.setAttribute('aria-hidden', inventoryOpen ? 'false' : 'true');
+
+    const currentMode = modeSystem ? modeSystem.getCurrentMode() : 'wall';
+    if (inventoryModeValue) {
+      inventoryModeValue.textContent = modeSystem ? modeSystem.getCurrentModeLabel() : 'WALL';
+    }
+
+    for (const chip of inventoryChips) {
+      const isActive = chip.dataset.inventoryMode === currentMode;
+      chip.classList.toggle('is-active', isActive);
+    }
+  }
+
+  function setInventoryOpen(nextOpen) {
+    inventoryOpen = !!nextOpen;
+    updateInventoryUi();
+    refreshHud();
+  }
+
+  function toggleInventory() {
+    setInventoryOpen(!inventoryOpen);
   }
 
   function toggleWorldMode() {
@@ -287,8 +321,18 @@ const THREE = window.THREE;
   }
 
   function handleDiscreteActions() {
+    if (actions.consumeInventoryToggle()) {
+      toggleInventory();
+    }
+
     if (actions.consumeRestart() && resetSystem) {
       resetSystem.resetGame();
+      updateInventoryUi();
+    }
+
+    if (inventoryOpen) {
+      pendingWheelZoomSteps = 0;
+      return;
     }
 
     if (actions.consumeCycleCamera() && cameraController) {
@@ -300,21 +344,36 @@ const THREE = window.THREE;
       toggleWorldMode();
     }
 
-    if (actions.consumeOrbitLeft() && cameraController) {
+    if (actions.consumeZoomIn() && cameraController) {
+      cameraController.zoomBy(1);
+    }
+
+    if (actions.consumeZoomOut() && cameraController) {
+      cameraController.zoomBy(-1);
+    }
+
+    if (actions.consumeRotateLeft() && cameraController) {
       cameraController.rotateOrbit(-1);
     }
 
-    if (actions.consumeOrbitRight() && cameraController) {
+    if (actions.consumeRotateRight() && cameraController) {
       cameraController.rotateOrbit(1);
+    }
+
+    if (cameraController && pendingWheelZoomSteps !== 0) {
+      const direction = Math.sign(pendingWheelZoomSteps);
+      cameraController.zoomBy(direction);
+      pendingWheelZoomSteps -= direction;
     }
 
     if (actions.consumeNextPlayerMode() && modeSystem) {
       modeSystem.cycleMode();
+      updateInventoryUi();
     }
   }
 
   function handleContextualActions() {
-    if (!modeSystem) return;
+    if (!modeSystem || inventoryOpen) return;
 
     if (actions.isPrimaryActionHeld()) {
       modeSystem.handlePrimaryActionHeld();
@@ -327,25 +386,29 @@ const THREE = window.THREE;
   }
 
   function update(delta) {
-    timeElapsed += delta;
-    actionCooldown = Math.max(0, actionCooldown - delta);
-
     handleDiscreteActions();
-    handleContextualActions();
 
-    if (playerSystem) playerSystem.update(delta);
-    if (modeSystem) modeSystem.update(delta);
-    if (chunkSystem) chunkSystem.ensureChunksAround(player.x, player.z);
-    if (enemiesSystem) enemiesSystem.update(delta);
-    if (coinsSystem) coinsSystem.update(delta);
-    if (particleSystem) particleSystem.update(delta);
+    if (!inventoryOpen) {
+      timeElapsed += delta;
+      actionCooldown = Math.max(0, actionCooldown - delta);
 
-    tryMaintainEnemies(delta);
+      handleContextualActions();
+
+      if (playerSystem) playerSystem.update(delta);
+      if (modeSystem) modeSystem.update(delta);
+      if (chunkSystem) chunkSystem.ensureChunksAround(player.x, player.z);
+      if (enemiesSystem) enemiesSystem.update(delta);
+      if (coinsSystem) coinsSystem.update(delta);
+      if (particleSystem) particleSystem.update(delta);
+
+      tryMaintainEnemies(delta);
+    }
 
     if (cameraController) {
       activeCamera = cameraController.update(delta, timeElapsed, player);
     }
 
+    updateInventoryUi();
     refreshHud();
     renderer.render(scene, activeCamera);
     input.endFrame();
@@ -468,7 +531,7 @@ const THREE = window.THREE;
     clock = new THREE.Clock();
 
     toggleViewBtn.addEventListener('click', () => {
-      if (!cameraController) return;
+      if (!cameraController || inventoryOpen) return;
       cameraController.cycleMode();
       refreshHud();
     });
@@ -476,20 +539,39 @@ const THREE = window.THREE;
     toggleProjectionBtn.style.display = 'none';
     if (hintText) {
       hintText.textContent =
-        'Déplacement : ZQSD / WASD / flèches • Espace = action contextuelle • C = cycle 2D / isométrique / perspective • M = mission/exploration • J = ↺ 45° • L = ↻ 45° • X = mode player • R = relancer';
+        'WASD = déplacement • Q = cycle murs / projectile / aqua / véhicule • E = inventaire (prototype) • ↑ / ↓ = zoom • ← / → = rotation 45° • molette = zoom • Espace = action contextuelle • M = mission / exploration • C = cycle caméra • R = relancer';
     }
 
-    toggleSandboxBtn.addEventListener('click', toggleWorldMode);
+    toggleSandboxBtn.addEventListener('click', () => {
+      if (inventoryOpen) return;
+      toggleWorldMode();
+    });
+
+    orbitLeftBtn.textContent = '↺ 45°';
+    orbitRightBtn.textContent = '↻ 45°';
 
     orbitLeftBtn.addEventListener('click', () => {
-      if (!cameraController) return;
+      if (!cameraController || inventoryOpen) return;
       cameraController.rotateOrbit(-1);
     });
 
     orbitRightBtn.addEventListener('click', () => {
-      if (!cameraController) return;
+      if (!cameraController || inventoryOpen) return;
       cameraController.rotateOrbit(1);
     });
+
+    inventoryCloseBtn?.addEventListener('click', () => {
+      setInventoryOpen(false);
+    });
+
+    const onWheelZoom = (event) => {
+      if (!cameraController || inventoryOpen) return;
+      event.preventDefault();
+      pendingWheelZoomSteps += event.deltaY < 0 ? 1 : -1;
+      pendingWheelZoomSteps = Math.max(-8, Math.min(8, pendingWheelZoomSteps));
+    };
+
+    renderer.domElement.addEventListener('wheel', onWheelZoom, { passive: false });
 
     window.addEventListener('resize', () => {
       handleResize({
@@ -526,6 +608,7 @@ const THREE = window.THREE;
     });
 
     resetSystem.resetGame();
+    updateInventoryUi();
 
     gameLoop = createGameLoop({
       clock,

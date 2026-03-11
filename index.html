@@ -152,6 +152,62 @@
       letter-spacing: 0.03em;
     }
 
+    #inventoryPanel {
+      position: fixed;
+      right: 14px;
+      top: 92px;
+      z-index: 25;
+      width: min(340px, calc(100vw - 28px));
+      display: none;
+      pointer-events: auto;
+    }
+
+    #inventoryPanel.is-open {
+      display: block;
+    }
+
+    .inventoryCard {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .inventoryHeader {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .inventoryText {
+      color: #becada;
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+
+    .inventoryList {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .inventoryChip {
+      padding: 7px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.09);
+      background: rgba(255,255,255,0.03);
+      color: #dbe7f8;
+      font-size: 0.8rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .inventoryChip.is-active {
+      border-color: rgba(116,246,255,0.28);
+      background: rgba(116,246,255,0.08);
+      color: var(--cyan);
+    }
+
     #error {
       position: fixed;
       left: 50%;
@@ -197,16 +253,45 @@
       <div id="status" class="card statusCard">Top = lecture de l’espace et navigation libre</div>
     </div>
 
+    <div id="inventoryPanel" aria-hidden="true">
+      <div class="card inventoryCard">
+        <div class="inventoryHeader">
+          <div>
+            <div class="label">Inventaire</div>
+            <div class="value">Prototype UI</div>
+          </div>
+          <button id="inventoryCloseBtn" class="btn">Fermer</button>
+        </div>
+        <div class="inventoryText">
+          Cette version prépare seulement l’ouverture / fermeture du menu.
+          Les sous-menus et la vraie navigation clavier / souris viendront dans une issue dédiée.
+        </div>
+        <div>
+          <div class="label">Mode actif</div>
+          <div id="inventoryModeValue" class="value" style="color: var(--cyan);">WALL</div>
+        </div>
+        <div>
+          <div class="label">Catégories prévues</div>
+          <div class="inventoryList">
+            <div class="inventoryChip" data-inventory-mode="wall">Wall / Brique</div>
+            <div class="inventoryChip" data-inventory-mode="aqua">Aqua</div>
+            <div class="inventoryChip" data-inventory-mode="projectile">Projectile</div>
+            <div class="inventoryChip" data-inventory-mode="vehicle">Véhicule</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="stack bottomStack">
       <div class="row">
         <div class="card">
           <div class="label">Interface vue</div>
           <div class="controls">
-            <button id="toggleViewBtn" class="btn">Top view ↔ Camera</button>
+            <button id="toggleViewBtn" class="btn">Cycle caméra</button>
             <button id="toggleProjectionBtn" class="btn">Isométrique ↔ Perspective</button>
             <button id="toggleSandboxBtn" class="btn">Mission ↔ Exploration</button>
-            <button id="orbitLeftBtn" class="btn">↺ 90°</button>
-            <button id="orbitRightBtn" class="btn">↻ 90°</button>
+            <button id="orbitLeftBtn" class="btn">↺ 45°</button>
+            <button id="orbitRightBtn" class="btn">↻ 45°</button>
           </div>
         </div>
         <div class="card">
@@ -223,7 +308,7 @@
         </div>
       </div>
 
-      <div id="hint" class="card hintCard">Déplacement : ZQSD / WASD / flèches • Espace = construire/détruire un mur • V = top/camera • C = iso/perspective • M = mission/exploration • J = ↺ 90° • L ou X = ↻ 90° • R = relancer</div>
+      <div id="hint" class="card hintCard">WASD = déplacement • Q = cycle modes • E = inventaire (prototype) • ↑ / ↓ = zoom • ← / → = rotation 45° • molette = zoom • Espace = action contextuelle • M = mission / exploration • C = cycle caméra • R = relancer</div>
     </div>
   </div>
 

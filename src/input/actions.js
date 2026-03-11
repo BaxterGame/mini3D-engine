@@ -1,7 +1,10 @@
-// mini-engine v0.2d — actions sémantiques
-// La caméra utilise maintenant un cycle unique sur `C` :
-// top 2D -> isométrique -> perspective -> top 2D.
-// `X` reste dédié au cycle des modes du player.
+// mini-engine v0.2f — actions sémantiques
+// Mapping gameplay #38 :
+// - WASD = déplacement
+// - Q = cycle des modes joueur
+// - E = inventaire
+// - flèches = caméra (zoom / rotation)
+// Les raccourcis historiques C / J / L / X restent tolérés en alias léger.
 
 function boolToAxis(positive, negative) {
   return (positive ? 1 : 0) - (negative ? 1 : 0);
@@ -9,10 +12,10 @@ function boolToAxis(positive, negative) {
 
 export function createActionController(input) {
   function getMovementIntent() {
-    const left = input.isDown('arrowleft') || input.isDown('q') || input.isDown('a');
-    const right = input.isDown('arrowright') || input.isDown('d');
-    const up = input.isDown('arrowup') || input.isDown('z') || input.isDown('w');
-    const down = input.isDown('arrowdown') || input.isDown('s');
+    const left = input.isDown('a');
+    const right = input.isDown('d');
+    const up = input.isDown('w');
+    const down = input.isDown('s');
 
     return {
       left,
@@ -51,16 +54,28 @@ export function createActionController(input) {
       return input.consumePress('m');
     },
 
-    consumeOrbitLeft() {
-      return input.consumePress('j');
+    consumeRotateLeft() {
+      return input.consumePress('arrowleft') || input.consumePress('j');
     },
 
-    consumeOrbitRight() {
-      return input.consumePress('l');
+    consumeRotateRight() {
+      return input.consumePress('arrowright') || input.consumePress('l');
+    },
+
+    consumeZoomIn() {
+      return input.consumePress('arrowup');
+    },
+
+    consumeZoomOut() {
+      return input.consumePress('arrowdown');
+    },
+
+    consumeInventoryToggle() {
+      return input.consumePress('e');
     },
 
     consumeNextPlayerMode() {
-      return input.consumePress('x');
+      return input.consumePress('q') || input.consumePress('x');
     },
   };
 }
