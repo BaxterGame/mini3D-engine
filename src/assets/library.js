@@ -182,11 +182,11 @@ function inferMaterialOptions(entry, texture) {
       transparent: false,
       opacity: 0.0,
 
-      roughness: 0.0,
+      roughness: 0.5,
       metalness: 0.0,
 
       emissive: 0x00ffff,
-      emissiveIntensity: 0.3,
+      emissiveIntensity: 0.0,
     };
   }
 
@@ -195,7 +195,7 @@ function inferMaterialOptions(entry, texture) {
     color: 0xffffff,
 
     transparent: isAqua,
-    opacity: isAqua ? 0.82 : 1,
+    opacity: isAqua ? 1 : 0,
 
     roughness: isAqua ? 0.1 : 0.65,
     metalness: isVehicle ? 0.12 : 0.04,
