@@ -4,7 +4,7 @@
     "target": "low-poly readable prototype assets",
     "mesh_triangle_budget_target": "8-64",
     "mesh_triangle_budget_max_for_tests": 128,
-    "texture_max_size": "256x256",
+    "texture_max_size": "2048x2048",
     "materials": "flat/simple only"
   },
   "naming": {
@@ -16,7 +16,7 @@
       "id": "wall-block",
       "type": "mesh+texture",
       "mesh": "meshes/mesh_wall_block_lp_v001.obj",
-      "texture": "textures/tex_wall_block_256_v001.png",
+      "texture": "textures/tex_atlas_world_2048_v001.png",
       "role": "mur / bloc de grille 1x1",
       "status": "test"
     },
@@ -24,7 +24,7 @@
       "id": "projectile-shard",
       "type": "mesh+texture",
       "mesh": "meshes/mesh_projectile_shard_lp_v001.obj",
-      "texture": "textures/tex_projectile_red_256_v001.png",
+      "texture": "textures/tex_atlas_world_2048_v001.png",
       "role": "tir simple / projectile lisible",
       "status": "test"
     },
@@ -32,7 +32,7 @@
       "id": "aqua-orb",
       "type": "mesh+texture",
       "mesh": "meshes/mesh_aqua_orb_lp_v001.obj",
-      "texture": "textures/tex_aqua_bubble_256_v001.png",
+      "texture": "textures/tex_atlas_world_2048_v001.png",
       "role": "mode aqua / bulle simple",
       "status": "test"
     },
@@ -40,7 +40,7 @@
       "id": "vehicle-kart",
       "type": "mesh+texture",
       "mesh": "meshes/mesh_vehicle_kart_lp_v001.obj",
-      "texture": "textures/tex_vehicle_green_256_v001.png",
+      "texture": "textures/tex_atlas_world_2048_v001.png",
       "role": "mode véhicule stub",
       "status": "test"
     },
@@ -48,7 +48,7 @@
       "id": "coin-token",
       "type": "mesh+texture",
       "mesh": "meshes/mesh_coin_token_lp_v001.obj",
-      "texture": "textures/tex_coin_gold_256_v001.png",
+      "texture": "textures/tex_atlas_world_2048_v001.png",
       "role": "pickup / récompense",
       "status": "test"
     }
