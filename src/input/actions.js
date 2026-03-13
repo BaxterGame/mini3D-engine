@@ -4,8 +4,8 @@
 // - Q = cycle des modes joueur
 // - E = inventaire
 // - flèches = caméra (zoom / rotation)
+// - clic gauche souris = action principale (build / fire)
 // Les raccourcis historiques C / J / L / X restent tolérés en alias léger.
-
 function boolToAxis(positive, negative) {
   return (positive ? 1 : 0) - (negative ? 1 : 0);
 }
@@ -29,51 +29,39 @@ export function createActionController(input) {
 
   return {
     getMovementIntent,
-
     isSprintHeld() {
       return input.isDown('shift');
     },
-
     isPrimaryActionHeld() {
-      return input.isDown('space');
+      return input.isDown('space') || input.isDown('mouseleft');
     },
-
     consumePrimaryActionRelease() {
-      return input.consumeRelease('space');
+      return input.consumeRelease('space') || input.consumeRelease('mouseleft');
     },
-
     consumeRestart() {
       return input.consumePress('r');
     },
-
     consumeCycleCamera() {
       return input.consumePress('c');
     },
-
     consumeToggleWorldMode() {
       return input.consumePress('m');
     },
-
     consumeRotateLeft() {
       return input.consumePress('arrowleft') || input.consumePress('j');
     },
-
     consumeRotateRight() {
       return input.consumePress('arrowright') || input.consumePress('l');
     },
-
     consumeZoomIn() {
       return input.consumePress('arrowup');
     },
-
     consumeZoomOut() {
       return input.consumePress('arrowdown');
     },
-
     consumeInventoryToggle() {
       return input.consumePress('e');
     },
-
     consumeNextPlayerMode() {
       return input.consumePress('q') || input.consumePress('x');
     },
