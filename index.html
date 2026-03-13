@@ -15,9 +15,12 @@
       --cyan: #74f6ff;
       --blue: #7ab6ff;
       --green: #7dffba;
+      --inventory-scale: 1;
     }
 
     * { box-sizing: border-box; }
+
+    [hidden] { display: none !important; }
 
     html, body {
       width: 100%;
@@ -154,12 +157,14 @@
 
     #inventoryPanel {
       position: fixed;
-      right: 14px;
-      top: 92px;
+      left: 18px;
+      top: 86px;
       z-index: 25;
-      width: min(340px, calc(100vw - 28px));
+      width: 340px;
       display: none;
       pointer-events: auto;
+      transform: scale(var(--inventory-scale));
+      transform-origin: top left;
     }
 
     #inventoryPanel.is-open {
@@ -167,45 +172,340 @@
     }
 
     .inventoryCard {
+      position: relative;
+      width: 100%;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 0;
+      border-radius: 0;
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+      overflow: visible;
     }
 
-    .inventoryHeader {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
+    .inventoryCloseBtn {
+      position: absolute;
+      top: 10px;
+      right: 0;
+      z-index: 4;
+      padding: 4px 8px;
+      border-radius: 0;
+      background: rgba(0,0,0,0.82);
+      border: 1px solid rgba(255,255,255,0.12);
+      font-size: 0.8rem;
+    }
+
+    .inventoryHero {
+      position: relative;
+      width: 340px;
+      min-height: 114px;
+      padding: 14px 14px 12px;
+      border-radius: 0;
+      background: linear-gradient(180deg, #1616168a 0%, #302f31c9 100%);
+      box-shadow: 0 10px 28px rgba(24, 0, 45, 0.34);
+    }
+
+    .inventoryHero .label {
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 2px;
+      font-size: 0.62rem;
+    }
+
+    .inventoryHero .value {
+      font-size: 1.3rem;
+      color: #ffffff;
+      margin-bottom: 4px;
     }
 
     .inventoryText {
-      color: #becada;
-      font-size: 0.88rem;
-      line-height: 1.45;
+      color: rgba(255,255,255,0.94);
+      font-size: 0.74rem;
+      line-height: 1.32;
+      width: 270px;
+      height: calc(1.32em * 4);
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 4;
     }
 
-    .inventoryList {
+    .inventorySelectionPill,
+    .inventoryFootnote,
+    .inventoryMetaRow {
+      display: none;
+    }
+
+    .inventoryHorizontalCluster {
+      width: 340px;
+      display: block;
+      margin-left: 0;
+    }
+
+    .inventoryRailArrow,
+    .inventoryListArrow {
+      display: none !important;
+    }
+
+    .inventoryRailArrow:hover,
+    .inventoryListArrow:hover {
+      transform: translateY(-1px);
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.34);
+    }
+
+    .inventoryRailArrow {
+      width: 34px;
+      height: 34px;
+      font-size: 1rem;
+    }
+
+    .inventoryRailViewport {
+      width: 100%;
+      padding: 10px 8px 8px;
+      border-radius: 0;
+     background: rgba(26, 25, 25, 0.705);
+      overflow: hidden;
+      box-shadow: 0 10px 24px rgba(79, 78, 80, 0.18);
+    }
+
+    #inventoryCategoryGrid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0;
+      align-items: center;e
+    }
+
+    .inventoryCategoryButton {
+      appearance: none;
+      min-height: 52px;
+      padding: 4px 2px;
+      border-radius: 0;
+      border: 1px solid transparent;
+      background: transparent;
+      color: #f7f9ff;
+      cursor: pointer;
       display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: background 0.14s ease, border-color 0.14s ease, opacity 0.14s ease;
+      opacity: 0.84;
     }
 
-    .inventoryChip {
-      padding: 7px 9px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.09);
-      background: rgba(255,255,255,0.03);
-      color: #dbe7f8;
-      font-size: 0.8rem;
+    .inventoryCategoryButton.is-active {
+      opacity: 1;
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.18);
+      box-shadow: inset 2px 0 0 rgba(255,255,255,0.22);
+    }
+
+    .inventoryCategoryThumb {
+      width: 34px;
+      height: 14px;
+      border-radius: 0;
+      border: 1px solid rgba(255,255,255,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #ffffff;
+      font-size: 0.76rem;
+      font-weight: 700;
+    }
+
+    .inventoryCategoryLabel {
+      font-size: 0.5rem;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.96);
+    }
+
+    .inventoryVerticalCluster {
+      width: 340px;
+      display: block;
+    }
+
+    .inventorySelectTag {
+      display: none;
+    }
+
+    .inventoryModeColumn {
+      position: relative;
+      width: 340px;
+      min-height: 276px;
+      padding: 10px 10px 12px;
+      border-radius: 0;
+      background: rgba(0, 0, 0, 0.7);
+      box-shadow: 0 14px 32px rgba(0,0,0,0.34);
+      overflow: hidden;
+    }
+
+    .inventoryModeColumn::before,
+    .inventoryModeColumn::after {
+      display: none;
+    }
+
+    .inventoryModeHeader {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      color: #f3f7ff;
+      font-size: 0.62rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .inventoryModeMarker {
+      width: 8px;
+      height: 8px;
+      background: #7df3ff;
+    }
+
+    .inventoryListArrow {
+      position: absolute;
+      left: 14px;
+      width: 22px;
+      height: 22px;
+      font-size: 0.88rem;
+      z-index: 2;
+    }
+
+    .inventoryListArrow--up {
+      top: 8px;
+    }
+
+    .inventoryListArrow--down {
+      bottom: 8px;
+    }
+
+    .inventoryListViewport {
+      position: relative;
+      height: 188px;
+      overflow: hidden;
+      padding-right: 0;
+    }
+
+    .inventoryListViewport.is-scrollable::before,
+    .inventoryListViewport.is-scrollable::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 14px;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .inventoryListViewport.is-scrollable::before {
+      top: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,0));
+    }
+
+    .inventoryListViewport.is-scrollable::after {
+      bottom: 0;
+      background: linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,0));
+    }
+
+    #inventorySubmenuGrid {
+      display: grid;
+      gap: 4px;
+      transition: transform 0.16s ease;
+      will-change: transform;
+    }
+
+    .inventoryListRow {
+      appearance: none;
+      width: 100%;
+      min-height: 40px;
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 8px 8px;
+      border: 1px solid transparent;
+      border-radius: 0;
+      background: transparent;
+      color: #ffffff;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.12s ease, border-color 0.12s ease;
+    }
+
+    .inventoryListRow:hover {
+      background: rgba(255,255,255,0.04);
+    }
+
+    .inventoryListRow.is-active {
+      background: rgba(255,255,255,0.07);
+      border-color: rgba(255,255,255,0.16);
+      box-shadow: inset 2px 0 0 rgba(255,255,255,0.92);
+    }
+
+    .inventoryListSwatch {
+      width: 16px;
+      height: 16px;
+      border-radius: 0;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+
+    .inventoryListText {
+      min-width: 0;
+    }
+
+    .inventoryListTextLabel {
+      font-size: 0.7rem;
       letter-spacing: 0.04em;
       text-transform: uppercase;
+      color: #f3f7ff;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    .inventoryChip.is-active {
-      border-color: rgba(116,246,255,0.28);
-      background: rgba(116,246,255,0.08);
-      color: var(--cyan);
+    .inventoryListTextMeta {
+      margin-top: 1px;
+      min-height: 12px;
+      font-size: 0.62rem;
+      color: #d8e4f8;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .inventoryHelpMini {
+      display: none;
+    }
+
+    @media (max-width: 1180px) {
+      :root {
+        --inventory-scale: 0.68;
+      }
+    }
+
+    @media (max-width: 860px) {
+      :root {
+        --inventory-scale: 0.6;
+      }
+
+      #inventoryPanel {
+        left: 12px;
+        top: 78px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      :root {
+        --inventory-scale: 0.54;
+      }
     }
 
     #error {
@@ -254,31 +554,47 @@
     </div>
 
     <div id="inventoryPanel" aria-hidden="true">
-      <div class="card inventoryCard">
-        <div class="inventoryHeader">
-          <div>
-            <div class="label">Inventaire</div>
-            <div class="value">Prototype UI</div>
+      <div class="inventoryCard">
+        <button id="inventoryCloseBtn" class="btn inventoryCloseBtn">E Fermer</button>
+
+        <div class="inventoryHero">
+          <div class="label">Build inventory</div>
+          <div id="inventoryTitleValue" class="value">Wall</div>
+          <div id="inventoryDescription" class="inventoryText">
+            Construction de blocs et variantes de structure.
           </div>
-          <button id="inventoryCloseBtn" class="btn">Fermer</button>
+          <div id="inventorySelectionPill" class="inventorySelectionPill">Dense</div>
         </div>
-        <div class="inventoryText">
-          Cette version prépare seulement l’ouverture / fermeture du menu.
-          Les sous-menus et la vraie navigation clavier / souris viendront dans une issue dédiée.
+
+        <div class="inventoryHorizontalCluster">
+          <button id="inventoryCategoryPrevBtn" class="inventoryRailArrow" aria-label="Catégorie précédente">←</button>
+          <div class="inventoryRailViewport">
+            <div id="inventoryCategoryGrid"></div>
+          </div>
+          <button id="inventoryCategoryNextBtn" class="inventoryRailArrow" aria-label="Catégorie suivante">→</button>
         </div>
-        <div>
-          <div class="label">Mode actif</div>
-          <div id="inventoryModeValue" class="value" style="color: var(--cyan);">WALL</div>
-        </div>
-        <div>
-          <div class="label">Catégories prévues</div>
-          <div class="inventoryList">
-            <div class="inventoryChip" data-inventory-mode="wall">Wall / Brique</div>
-            <div class="inventoryChip" data-inventory-mode="aqua">Aqua</div>
-            <div class="inventoryChip" data-inventory-mode="projectile">Projectile</div>
-            <div class="inventoryChip" data-inventory-mode="vehicle">Véhicule</div>
+
+        <div class="inventoryVerticalCluster">
+          <div class="inventorySelectTag">Select</div>
+
+          <div class="inventoryModeColumn">
+            <button id="inventorySubmenuPrevBtn" class="inventoryListArrow inventoryListArrow--up" aria-label="Entrée précédente">↑</button>
+            <button id="inventorySubmenuNextBtn" class="inventoryListArrow inventoryListArrow--down" aria-label="Entrée suivante">↓</button>
+
+            <div class="inventoryModeHeader">
+              <span class="inventoryModeMarker"></span>
+              <span id="inventoryModeValue">WALL</span>
+              <span>/</span>
+              <span id="inventoryVariantValue">BR H2</span>
+            </div>
+
+            <div class="inventoryListViewport">
+              <div id="inventorySubmenuGrid"></div>
+            </div>
           </div>
         </div>
+
+        <div id="inventoryHelp" class="inventoryHelpMini">← → catégories • ↑ ↓ variantes • E fermer</div>
       </div>
     </div>
 
@@ -308,7 +624,7 @@
         </div>
       </div>
 
-      <div id="hint" class="card hintCard">WASD = déplacement • Q = cycle modes • E = inventaire (prototype) • ↑ / ↓ = zoom • ← / → = rotation 45° • molette = zoom • Espace = action contextuelle • M = mission / exploration • C = cycle caméra • R = relancer</div>
+      <div id="hint" class="card hintCard">WASD = déplacement • E = inventaire • inventaire : flèches = navigation • gameplay : ↑ / ↓ = zoom, ← / → = rotation 45° • Q = cycle modes • molette = zoom • Espace = action contextuelle • M = mission / exploration • C = cycle caméra • R = relancer</div>
     </div>
   </div>
 

@@ -17,11 +17,11 @@ export function createState(THREE) {
   const gridChunks = new Map();
 
   const shared = {
-    wallGeo: new THREE.BoxGeometry(1, 2.2, 1),
+    wallGeo: new THREE.BoxGeometry(0.98,0.4,0.98),
     userWallMat: new THREE.MeshStandardMaterial({
-      color: 0x7ef9ff,
-      emissive: 0x34d7df,
-      emissiveIntensity: 0.34,
+      color: 0x12FF89,
+      emissive: 0x12FFF0,
+      emissiveIntensity: 0.2,
       roughness: 0.7,
       metalness: 0.1
     }),

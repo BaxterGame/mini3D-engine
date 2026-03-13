@@ -195,7 +195,7 @@ function inferMaterialOptions(entry, texture) {
     color: 0xffffff,
 
     transparent: isAqua,
-    opacity: isAqua ? 1 : 0,
+    opacity: isAqua ? 0.85 : 0,
 
     roughness: isAqua ? 0.1 : 0.65,
     metalness: isVehicle ? 0.12 : 0.04,
