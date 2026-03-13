@@ -198,7 +198,9 @@ function inferMaterialOptions(entry, texture) {
     opacity: isAqua ? 0.85 : 0,
 
     roughness: isAqua ? 0.1 : 0.65,
-    metalness: isVehicle ? 0.12 : 0.04,
+    metalness: isAqua ? 0.12 : 0.04,
+    roughness: isVehicle ? 0.5 : 0.65,
+    metalness: isVehicle ? 0.0 : 0.04,
 
     emissive: isProjectile ? 0x220000 : isAqua ? 0x0b2344 : 0x000000,
     emissiveIntensity: isProjectile ? 0.45 : isAqua ? 0.18 : 0,
