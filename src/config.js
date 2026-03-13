@@ -3,7 +3,7 @@
 export const BORDER_HALF = 50;        // bordure carrée +/-50
 export const INNER_LIMIT = 48.6;      // limite de clamp interne (évite la bordure)
 export const WIN_SCORE = 3;           // nombre de pièces à obtenir
-export const BASE_ENEMIES = 6;        // nombre d'ennemis maintenu
+export const BASE_ENEMIES = 10;        // nombre d'ennemis maintenu
 
 export const CHUNK_SIZE = 20;         // taille d'un chunk visuel de grille
 export const CHUNK_RADIUS = 3;        // rayon de chunks autour du joueur

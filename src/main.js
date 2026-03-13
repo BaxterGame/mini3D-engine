@@ -16,6 +16,7 @@ import { keyForCell } from './utils/grid.js';
 import { bindKeyboard, createInputController, createInputState } from './input/keyboard.js';
 import { createActionController } from './input/actions.js';
 import { createHud } from './ui/hud.js';
+import { createInventoryMenu } from './ui/inventoryMenu.js';
 import { createRenderer, handleResize, setOrthoSize } from './render/renderer.js';
 import { createCameraController } from './render/cameraController.js';
 import { createCollisionSystem } from './world/collision.js';
@@ -62,9 +63,15 @@ const THREE = window.THREE;
   const statusText = document.getElementById('status');
   const hintText = document.getElementById('hint');
   const inventoryPanel = document.getElementById('inventoryPanel');
+  const inventoryTitleValue = document.getElementById('inventoryTitleValue');
   const inventoryModeValue = document.getElementById('inventoryModeValue');
+  const inventoryVariantValue = document.getElementById('inventoryVariantValue');
+  const inventoryDescription = document.getElementById('inventoryDescription');
+  const inventorySelectionPill = document.getElementById('inventorySelectionPill');
+  const inventoryHelp = document.getElementById('inventoryHelp');
+  const inventoryCategoryGrid = document.getElementById('inventoryCategoryGrid');
+  const inventorySubmenuGrid = document.getElementById('inventorySubmenuGrid');
   const inventoryCloseBtn = document.getElementById('inventoryCloseBtn');
-  const inventoryChips = Array.from(document.querySelectorAll('[data-inventory-mode]'));
   const toggleViewBtn = document.getElementById('toggleViewBtn');
   const toggleProjectionBtn = document.getElementById('toggleProjectionBtn');
   const toggleSandboxBtn = document.getElementById('toggleSandboxBtn');
@@ -87,6 +94,32 @@ const THREE = window.THREE;
       orbitRightBtn,
     },
     { WIN_SCORE },
+  );
+
+  const inventoryMenu = createInventoryMenu(
+    {
+      root: inventoryPanel,
+      titleValue: inventoryTitleValue,
+      modeValue: inventoryModeValue,
+      variantValue: inventoryVariantValue,
+      descriptionEl: inventoryDescription,
+      selectionPillEl: inventorySelectionPill,
+      helpEl: inventoryHelp,
+      categoryGrid: inventoryCategoryGrid,
+      submenuGrid: inventorySubmenuGrid,
+      closeButton: inventoryCloseBtn,
+    },
+    {
+      onSelectionChange(selection) {
+        if (modeSystem && typeof modeSystem.setMode === 'function') {
+          modeSystem.setMode(selection.category.id);
+        }
+        refreshHud();
+      },
+      onCloseRequest() {
+        setInventoryOpen(false);
+      },
+    },
   );
 
   let renderer;
@@ -280,24 +313,15 @@ const THREE = window.THREE;
       cameraMode: cameraController ? cameraController.getCameraMode() : 'top',
       playerModeLabel: modeSystem ? modeSystem.getCurrentModeLabel() : 'WALL',
       inventoryOpen,
+      inventorySelectionLabel: inventoryMenu.getSelectionSummary(),
     });
   }
 
   function updateInventoryUi() {
-    if (!inventoryPanel) return;
-
-    inventoryPanel.classList.toggle('is-open', inventoryOpen);
-    inventoryPanel.setAttribute('aria-hidden', inventoryOpen ? 'false' : 'true');
-
-    const currentMode = modeSystem ? modeSystem.getCurrentMode() : 'wall';
-    if (inventoryModeValue) {
-      inventoryModeValue.textContent = modeSystem ? modeSystem.getCurrentModeLabel() : 'WALL';
-    }
-
-    for (const chip of inventoryChips) {
-      const isActive = chip.dataset.inventoryMode === currentMode;
-      chip.classList.toggle('is-active', isActive);
-    }
+    inventoryMenu.sync({
+      open: inventoryOpen,
+      modeId: modeSystem ? modeSystem.getCurrentMode() : 'wall',
+    });
   }
 
   function setInventoryOpen(nextOpen) {
@@ -332,6 +356,23 @@ const THREE = window.THREE;
 
     if (inventoryOpen) {
       pendingWheelZoomSteps = 0;
+
+      if (actions.consumeZoomIn()) {
+        inventoryMenu.moveVertical(-1);
+      }
+
+      if (actions.consumeZoomOut()) {
+        inventoryMenu.moveVertical(1);
+      }
+
+      if (actions.consumeRotateLeft()) {
+        inventoryMenu.moveHorizontal(-1);
+      }
+
+      if (actions.consumeRotateRight()) {
+        inventoryMenu.moveHorizontal(1);
+      }
+
       return;
     }
 
@@ -539,7 +580,7 @@ const THREE = window.THREE;
     toggleProjectionBtn.style.display = 'none';
     if (hintText) {
       hintText.textContent =
-        'WASD = déplacement • Q = cycle murs / projectile / aqua / véhicule • E = inventaire (prototype) • ↑ / ↓ = zoom • ← / → = rotation 45° • molette = zoom • Espace = action contextuelle • M = mission / exploration • C = cycle caméra • R = relancer';
+        'WASD = déplacement • E = inventaire • inventaire : flèches = navigation • gameplay : ↑ / ↓ = zoom, ← / → = rotation 45° • Q = cycle murs / projectile / aqua / véhicule • molette = zoom • Espace = action contextuelle • M = mission / exploration • C = cycle caméra • R = relancer';
     }
 
     toggleSandboxBtn.addEventListener('click', () => {
@@ -558,10 +599,6 @@ const THREE = window.THREE;
     orbitRightBtn.addEventListener('click', () => {
       if (!cameraController || inventoryOpen) return;
       cameraController.rotateOrbit(1);
-    });
-
-    inventoryCloseBtn?.addEventListener('click', () => {
-      setInventoryOpen(false);
     });
 
     const onWheelZoom = (event) => {
