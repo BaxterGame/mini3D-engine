@@ -10,7 +10,7 @@ Sortir du placeholder pur sans alourdir le projet, avec :
 
 ## Structure
 - `meshes/` : meshes de test au format `.obj`
-- `textures/` : textures de test en `256x256`
+- `textures/` : textures atlas 2048px 
 - `manifest.json` : liste des assets, conventions et contraintes
 
 ## Conventions de nommage
