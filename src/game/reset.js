@@ -44,10 +44,15 @@ export function createResetSystem(opts) {
       }
     }
 
-    while (userWalls.length) {
-      const wall = userWalls.pop();
-      userWallSet.delete(keyForCell(wall.x, wall.z));
-      scene.remove(wall.mesh);
+    const wallsSystem = getWallsSystem ? getWallsSystem() : null;
+    if (wallsSystem && typeof wallsSystem.clearAllWalls === 'function') {
+      wallsSystem.clearAllWalls();
+    } else {
+      while (userWalls.length) {
+        const wall = userWalls.pop();
+        userWallSet.delete(keyForCell(wall.x, wall.z));
+        if (wall.mesh) scene.remove(wall.mesh);
+      }
     }
   }
 

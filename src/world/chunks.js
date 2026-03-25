@@ -8,7 +8,7 @@ export function createChunkSystem({ THREE, scene, gridChunks, CHUNK_SIZE, CHUNK_
     const plane = new THREE.Mesh(
       new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE),
       new THREE.MeshStandardMaterial({
-        color: 0x0c1118,
+        color: 0xfdfff7,
         roughness: 0.96,
         metalness: 0.03
       })
@@ -28,13 +28,13 @@ export function createChunkSystem({ THREE, scene, gridChunks, CHUNK_SIZE, CHUNK_
     lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     const lines = new THREE.LineSegments(
       lineGeo,
-      new THREE.LineBasicMaterial({ color: 0x163049, transparent: true, opacity: 0.35 })
+      new THREE.LineBasicMaterial({ color: 0x163049, transparent: true, opacity: 0.06})
     );
     group.add(lines);
 
     const edge = new THREE.LineSegments(
       new THREE.EdgesGeometry(new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE)),
-      new THREE.LineBasicMaterial({ color: 0x1f4667, transparent: true, opacity: 0.18 })
+      new THREE.LineBasicMaterial({ color: 0x1f4667, transparent: true, opacity: 0.07})
     );
     edge.rotation.x = -Math.PI / 2;
     edge.position.y = 0.02;
