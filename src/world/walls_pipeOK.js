@@ -4,7 +4,8 @@
 // - brick-light (BX H1)     : contour/extrude rounded
 // - brick-mini  (Node Grid) : posts + links
 // - brick-standard (Rebar Frame) : scaffold frame / open structure
-// - brick-tall (Ribbon Wall) : flat beveled ribbon / signal band
+// - brick-tall (Energy Wall) : translucent panel + emissive spine
+// - brick-capsule (Capsule Wall) : straight capsules by X/Y runs
 
 function mix(a, b, t) {
   return a + ((b - a) * t);
@@ -275,73 +276,52 @@ const VARIANT_STYLES = Object.freeze({
   },
   'brick-standard': {
     type: 'rebar-frame',
-    cacheKey: 'wall-rebar-frame-v2',
-    colorDark: 0xb1bdbd,
-    colorMid: 0xf2fcfc,
-    colorLight: 0xf5fcf8,
-    emissive: 0x37e6fa,
+    cacheKey: 'wall-rebar-frame-v1',
+    colorDark: 0x6d14b6,
+    colorMid: 0xae42ff,
+    colorLight: 0xe8bdff,
+    emissive: 0x2c074c,
     emissiveIntensity: 0.16,
     roughness: 0.28,
     metalness: 0.34,
-    surfaceY: 0.25,
+    surfaceY: 0.86,
   },
   'brick-tall': {
-    type: 'ribbon-wall',
-    cacheKey: 'wall-ribbon-wall-v1',
-    colorDark: 0x2997cf,
-    colorMid: 0x4ec4ff,
-    colorLight: 0xd8f6ff,
-    emissive: 0x1166a4,
-    emissiveIntensity: 0.18,
-    roughness: 0.24,
-    metalness: 0.08,
-    surfaceY: 0.0,
-    depth: 2,
-    smoothIterations: 0,
+    type: 'energy-wall',
+    cacheKey: 'wall-energy-wall-v1',
+    colorDark: 0x0d4f9a,
+    colorMid: 0x1ab5ff,
+    colorLight: 0xb8f5ff,
+    emissive: 0x0aa7ff,
+    emissiveIntensity: 0.28,
+    roughness: 0.16,
+    metalness: 0.12,
+    surfaceY: 0.88,
+    depth: 0.16,
+    smoothIterations: 1,
     smoothRatio: 0.18,
-    curveSegments: 5,
+    curveSegments: 14,
     bevelEnabled: true,
-    bevelThickness: 0.035,
-    bevelSize: 0.11,
+    bevelThickness: 0.04,
+    bevelSize: 0.08,
     bevelOffset: 0,
     bevelSegments: 2,
   },
-  //  original brick
-  //   'brick-tall': {
-  //   type: 'ribbon-wall',
-  //   cacheKey: 'wall-ribbon-wall-v1',
-  //   colorDark: 0x21486f,
-  //   colorMid: 0x4ec4ff,
-  //   colorLight: 0xd8f6ff,
-  //   emissive: 0x1166a4,
-  //   emissiveIntensity: 0.18,
-  //   roughness: 0.24,
-  //   metalness: 0.08,
-  //   surfaceY: 0.92,
-  //   depth: 0.14,
-  //   smoothIterations: 0,
-  //   smoothRatio: 0.18,
-  //   curveSegments: 10,
-  //   bevelEnabled: true,
-  //   bevelThickness: 0.035,
-  //   bevelSize: 0.11,
-  //   bevelOffset: 0,
-  //   bevelSegments: 2,
-  // },
   'brick-capsule': {
     type: 'capsule-wall',
-    cacheKey: 'wall-capsule-v1',
-    colorDark: 0x6f00ba,
+    cacheKey: 'wall-capsule-v2',
+    colorDark: 0x6e00b8,
     colorMid: 0xad03fc,
-    colorLight: 0xe19bff,
-    emissive: 0x4b0073,
-    emissiveIntensity: 0.14,
-    roughness: 0.24,
+    colorLight: 0xd58cff,
+    emissive: 0x3d0070,
+    emissiveIntensity: 0.1,
+    roughness: 0.28,
     metalness: 0.12,
-    surfaceY: 0.88,
+    surfaceY: 0.9,
     radius: 0.5,
+    standaloneLength: 0.12,
     radialSegments: 8,
-    capSegments: 6,
+    capSegments: 10,
   },
 });
 
@@ -359,20 +339,6 @@ function createGradientMaterial(THREE, style, options = {}) {
     uStripeStrength: { value: options.stripeStrength ?? 0.0 },
   };
 
-//    Test PhysicalMaterial + Sheen
-//    const material = new THREE.MeshPhysicalMaterial({
-//    color: style.colorMid,
-//    sheen: 0.5,
-//    sheenColor: new THREE.Color(0xffffff),
-//    emissive: style.emissive,
-//    emissiveIntensity: style.emissiveIntensity,
-//    roughness: style.roughness,
-//    metalness: style.metalness,
-//    transparent: Boolean(options.transparent),
-//    opacity: options.opacity ?? 1,
-//    depthWrite: options.depthWrite ?? true,
-//  });
-  
   const material = new THREE.MeshStandardMaterial({
     color: style.colorMid,
     emissive: style.emissive,
@@ -506,10 +472,10 @@ function buildNodeGridMeshes({ THREE, scene, cells, style, material }) {
 function buildRebarFrameMeshes({ THREE, scene, cells, style, material }) {
   const group = new THREE.Group();
   const occupied = new Set(cells.map((cell) => keyForVariantCell(cell.x, cell.z)));
-  const postGeo = new THREE.CylinderGeometry(0.075, 0.1, 1, 8);
+  const postGeo = new THREE.CylinderGeometry(0.05, 0.05, 1, 8);
   const beamGeo = new THREE.CylinderGeometry(0.04, 0.04, 1, 8);
   const braceGeo = new THREE.CylinderGeometry(0.025, 0.025, 1, 6);
-  const postCapGeo = new THREE.SphereGeometry(0.075, 8, 8);
+  const postCapGeo = new THREE.SphereGeometry(0.06, 8, 8);
   const cornerOffset = 0.34;
   const yBottom = style.surfaceY + 0.02;
   const yTop = style.surfaceY + 0.98;
@@ -553,23 +519,21 @@ function buildRebarFrameMeshes({ THREE, scene, cells, style, material }) {
     if (!occupied.has(keyForVariantCell(x, z + 1))) addCylinderBetween(THREE, group, beamGeo, material, bottomRight, bottomLeft);
     if (!occupied.has(keyForVariantCell(x - 1, z))) addCylinderBetween(THREE, group, beamGeo, material, bottomLeft, topLeft);
 
-    const braceInset = 0.02;
-    const braceY = style.surfaceY + 0.52;
     addCylinderBetween(
       THREE,
       group,
       braceGeo,
       material,
-      new THREE.Vector3(x - cornerOffset + braceInset, braceY, z - cornerOffset + braceInset),
-      new THREE.Vector3(x + cornerOffset - braceInset, braceY, z + cornerOffset - braceInset),
+      new THREE.Vector3(x - 0.2, style.surfaceY + 0.24, z),
+      new THREE.Vector3(x + 0.2, style.surfaceY + 0.64, z),
     );
     addCylinderBetween(
       THREE,
       group,
       braceGeo,
       material,
-      new THREE.Vector3(x + cornerOffset - braceInset, braceY, z - cornerOffset + braceInset),
-      new THREE.Vector3(x - cornerOffset + braceInset, braceY, z + cornerOffset - braceInset),
+      new THREE.Vector3(x + 0.2, style.surfaceY + 0.24, z),
+      new THREE.Vector3(x - 0.2, style.surfaceY + 0.64, z),
     );
 
     if (occupied.has(keyForVariantCell(x + 1, z))) {
@@ -598,16 +562,24 @@ function buildRebarFrameMeshes({ THREE, scene, cells, style, material }) {
   return [{ mesh: group, disposeGeometry: true, disposeMaterial: false, cells: cells.map(({ x, z }) => ({ x, z })) }];
 }
 
-
-function buildRibbonWallMeshes({ THREE, scene, cells, style, material }) {
+function buildEnergyWallMeshes({ THREE, scene, cells, style, material }) {
   const components = collectConnectedComponents(cells);
   const built = [];
+  const spineMaterial = createGradientMaterial(THREE, style, {
+    keySuffix: 'energy-spine',
+    glowStrength: 0.32,
+    pulseScale: 0.45,
+    stripeStrength: 0.25,
+    transparent: true,
+    opacity: 0.92,
+    depthWrite: false,
+  });
 
   for (const component of components) {
     const shapes = buildVariantShapes(THREE, component, style);
     if (!shapes.length) continue;
 
-    const geometry = new THREE.ExtrudeGeometry(shapes, {
+    const shellGeometry = new THREE.ExtrudeGeometry(shapes, {
       depth: style.depth,
       steps: 1,
       curveSegments: style.curveSegments,
@@ -617,107 +589,39 @@ function buildRibbonWallMeshes({ THREE, scene, cells, style, material }) {
       bevelOffset: style.bevelOffset,
       bevelSegments: style.bevelSegments,
     });
-    geometry.rotateX(-Math.PI / 2);
-    geometry.computeVertexNormals();
+    shellGeometry.rotateX(-Math.PI / 2);
+    shellGeometry.computeVertexNormals();
 
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.y = style.surfaceY;
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.renderOrder = 3;
-    scene.add(mesh);
+    const shellMesh = new THREE.Mesh(shellGeometry, material);
+    shellMesh.position.y = style.surfaceY;
+    shellMesh.castShadow = true;
+    shellMesh.receiveShadow = true;
+    shellMesh.renderOrder = 3;
 
-    built.push({ mesh, disposeGeometry: true, disposeMaterial: false, cells: Array.from(component, (key) => parseCellKey(key)) });
+    const spineGeometry = shellGeometry.clone();
+    const spineMesh = new THREE.Mesh(spineGeometry, spineMaterial.clone());
+    spineMesh.position.y = style.surfaceY + 0.06;
+    spineMesh.scale.set(0.74, 1.0, 0.74);
+    spineMesh.castShadow = false;
+    spineMesh.receiveShadow = false;
+    spineMesh.renderOrder = 4;
+
+    const group = new THREE.Group();
+    group.add(shellMesh);
+    group.add(spineMesh);
+    scene.add(group);
+
+    built.push({
+      mesh: group,
+      disposeGeometry: true,
+      disposeMaterial: true,
+      extraMaterials: [spineMesh.material],
+      extraGeometries: [spineGeometry],
+      cells: Array.from(component, (key) => parseCellKey(key)),
+    });
   }
 
   return built;
-}
-
-function buildCapsuleWallMeshes({ THREE, scene, cells, style, material }) {
-  const group = new THREE.Group();
-  const occupied = new Set(cells.map((cell) => keyForVariantCell(cell.x, cell.z)));
-  const capsuleGeoCache = new Map();
-  const radius = style.radius || 0.18;
-  const radialSegments = style.radialSegments || 12;
-  const capSegments = style.capSegments || 6;
-  const y = style.surfaceY + radius;
-
-  function getCapsuleGeometry(totalLength) {
-    const key = totalLength.toFixed(4);
-    if (!capsuleGeoCache.has(key)) {
-      const bodyLength = Math.max(totalLength - (radius * 2), 0.0001);
-      capsuleGeoCache.set(key, new THREE.CapsuleGeometry(radius, bodyLength, capSegments, radialSegments));
-    }
-    return capsuleGeoCache.get(key);
-  }
-
-  function addCapsule(start, end) {
-    const direction = new THREE.Vector3().subVectors(end, start);
-    const totalLength = direction.length();
-    if (totalLength < 1e-6) return;
-    const mesh = new THREE.Mesh(getCapsuleGeometry(totalLength), material);
-    mesh.position.copy(start).add(end).multiplyScalar(0.5);
-    const up = new THREE.Vector3(0, 1, 0);
-    mesh.quaternion.setFromUnitVectors(up, direction.clone().normalize());
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    group.add(mesh);
-  }
-
-  // horizontal runs
-  for (const cell of cells) {
-    const { x, z } = cell;
-    const hasLeft = occupied.has(keyForVariantCell(x - 1, z));
-    const hasRight = occupied.has(keyForVariantCell(x + 1, z));
-    if (hasLeft || !hasRight) continue;
-
-    let endX = x;
-    while (occupied.has(keyForVariantCell(endX + 1, z))) endX += 1;
-
-    addCapsule(
-      new THREE.Vector3(x - 0.5, y, z),
-      new THREE.Vector3(endX + 0.5, y, z),
-    );
-  }
-
-  // vertical runs
-  for (const cell of cells) {
-    const { x, z } = cell;
-    const hasUp = occupied.has(keyForVariantCell(x, z - 1));
-    const hasDown = occupied.has(keyForVariantCell(x, z + 1));
-    if (hasUp || !hasDown) continue;
-
-    let endZ = z;
-    while (occupied.has(keyForVariantCell(x, endZ + 1))) endZ += 1;
-
-    addCapsule(
-      new THREE.Vector3(x, y, z - 0.5),
-      new THREE.Vector3(x, y, endZ + 0.5),
-    );
-  }
-
-  // isolated singles (no horizontal/vertical neighbors)
-  for (const cell of cells) {
-    const { x, z } = cell;
-    const hasNeighbour = occupied.has(keyForVariantCell(x - 1, z))
-      || occupied.has(keyForVariantCell(x + 1, z))
-      || occupied.has(keyForVariantCell(x, z - 1))
-      || occupied.has(keyForVariantCell(x, z + 1));
-    if (hasNeighbour) continue;
-    addCapsule(
-      new THREE.Vector3(x, y, z - 0.5),
-      new THREE.Vector3(x, y, z + 0.5),
-    );
-  }
-
-  scene.add(group);
-  return [{
-    mesh: group,
-    disposeGeometry: true,
-    disposeMaterial: false,
-    extraGeometries: Array.from(capsuleGeoCache.values()),
-    cells: cells.map(({ x, z }) => ({ x, z })),
-  }];
 }
 
 function buildShapeVariantMesh({ THREE, scene, cells, style, material }) {
@@ -754,14 +658,135 @@ function buildShapeVariantMesh({ THREE, scene, cells, style, material }) {
   return built;
 }
 
+
+function collectAxisRuns(cells) {
+  const occupied = new Set(cells.map((cell) => keyForVariantCell(cell.x, cell.z)));
+  const horizontal = [];
+  const vertical = [];
+  const runCells = new Set();
+
+  const byRow = new Map();
+  const byCol = new Map();
+  for (const cell of cells) {
+    if (!byRow.has(cell.z)) byRow.set(cell.z, []);
+    if (!byCol.has(cell.x)) byCol.set(cell.x, []);
+    byRow.get(cell.z).push(cell.x);
+    byCol.get(cell.x).push(cell.z);
+  }
+
+  for (const [z, xs] of byRow) {
+    const sorted = Array.from(new Set(xs)).sort((a, b) => a - b);
+    let start = sorted[0];
+    let prev = sorted[0];
+    for (let i = 1; i <= sorted.length; i += 1) {
+      const value = sorted[i];
+      if (value === prev + 1) {
+        prev = value;
+        continue;
+      }
+      if (prev > start) {
+        horizontal.push({ z, startX: start, endX: prev });
+        for (let x = start; x <= prev; x += 1) runCells.add(keyForVariantCell(x, z));
+      }
+      start = value;
+      prev = value;
+    }
+  }
+
+  for (const [x, zs] of byCol) {
+    const sorted = Array.from(new Set(zs)).sort((a, b) => a - b);
+    let start = sorted[0];
+    let prev = sorted[0];
+    for (let i = 1; i <= sorted.length; i += 1) {
+      const value = sorted[i];
+      if (value === prev + 1) {
+        prev = value;
+        continue;
+      }
+      if (prev > start) {
+        vertical.push({ x, startZ: start, endZ: prev });
+        for (let z = start; z <= prev; z += 1) runCells.add(keyForVariantCell(x, z));
+      }
+      start = value;
+      prev = value;
+    }
+  }
+
+  const singles = [];
+  for (const cell of cells) {
+    const key = keyForVariantCell(cell.x, cell.z);
+    if (!runCells.has(key) && occupied.has(key)) singles.push(cell);
+  }
+
+  return { horizontal, vertical, singles };
+}
+
+function addCapsuleBetween(THREE, group, style, material, start, end) {
+  const direction = new THREE.Vector3().subVectors(end, start);
+  const distance = direction.length();
+  const radius = style.radius || 0.22;
+  const bodyLength = Math.max(0.0001, distance - (radius * 2));
+  const geometry = new THREE.CapsuleGeometry(radius, bodyLength, style.capSegments || 10, style.radialSegments || 18);
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.copy(start).add(end).multiplyScalar(0.5);
+  const up = new THREE.Vector3(0, 1, 0);
+  mesh.quaternion.setFromUnitVectors(up, direction.normalize());
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  group.add(mesh);
+}
+
+function buildCapsuleWallMeshes({ THREE, scene, cells, style, material }) {
+  const group = new THREE.Group();
+  const { horizontal, vertical, singles } = collectAxisRuns(cells);
+  const y = style.surfaceY + style.radius;
+
+  for (const run of horizontal) {
+    addCapsuleBetween(
+      THREE,
+      group,
+      style,
+      material,
+      new THREE.Vector3(run.startX - 0.5, y, run.z),
+      new THREE.Vector3(run.endX + 0.5, y, run.z),
+    );
+  }
+
+  for (const run of vertical) {
+    addCapsuleBetween(
+      THREE,
+      group,
+      style,
+      material,
+      new THREE.Vector3(run.x, y, run.startZ - 0.5),
+      new THREE.Vector3(run.x, y, run.endZ + 0.5),
+    );
+  }
+
+  for (const cell of singles) {
+    const half = style.standaloneLength || 0.12;
+    addCapsuleBetween(
+      THREE,
+      group,
+      style,
+      material,
+      new THREE.Vector3(cell.x - half, y, cell.z),
+      new THREE.Vector3(cell.x + half, y, cell.z),
+    );
+  }
+
+  scene.add(group);
+  return [{ mesh: group, disposeGeometry: true, disposeMaterial: false, cells: cells.map(({ x, z }) => ({ x, z })) }];
+}
+
 function buildVariantMesh({ THREE, scene, cells, style, material }) {
   switch (style.type) {
     case 'node-grid':
       return buildNodeGridMeshes({ THREE, scene, cells, style, material });
     case 'rebar-frame':
       return buildRebarFrameMeshes({ THREE, scene, cells, style, material });
-    case 'ribbon-wall':
-      return buildRibbonWallMeshes({ THREE, scene, cells, style, material });
+    case 'energy-wall':
+      return buildEnergyWallMeshes({ THREE, scene, cells, style, material });
     case 'capsule-wall':
       return buildCapsuleWallMeshes({ THREE, scene, cells, style, material });
     case 'shape':

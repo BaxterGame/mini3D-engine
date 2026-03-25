@@ -96,6 +96,13 @@ const THREE = window.THREE;
     { WIN_SCORE },
   );
 
+  const selectedInventoryItems = {
+    wall: 'brick-dense',
+    aqua: 'aqua-water',
+    projectile: 'proj-light',
+    vehicle: 'vehicle-car',
+  };
+
   const inventoryMenu = createInventoryMenu(
     {
       root: inventoryPanel,
@@ -111,6 +118,9 @@ const THREE = window.THREE;
     },
     {
       onSelectionChange(selection) {
+        if (selection?.category?.id && selection?.item?.id) {
+          selectedInventoryItems[selection.category.id] = selection.item.id;
+        }
         if (modeSystem && typeof modeSystem.setMode === 'function') {
           modeSystem.setMode(selection.category.id);
         }
@@ -215,8 +225,8 @@ const THREE = window.THREE;
 
   function makeScene() {
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x070a10);
-    scene.fog = new THREE.Fog(0x070a10, 26, 130);
+    scene.background = new THREE.Color(0xfdfff7);
+    scene.fog = new THREE.Fog(0xfdfff7, 10, 130);
 
     perspectiveCamera = new THREE.PerspectiveCamera(
       56,
@@ -230,7 +240,7 @@ const THREE = window.THREE;
     setOrthoSize(orthoCamera, 22);
     activeCamera = orthoCamera;
 
-    const hemi = new THREE.HemisphereLight(0xb7dcff, 0x06090f, 0.92);
+    const hemi = new THREE.HemisphereLight(0xfdfff7, 0x06090f, 0.92);
     scene.add(hemi);
 
     const dir = new THREE.DirectionalLight(0xffffff, 1.15);
@@ -251,7 +261,7 @@ const THREE = window.THREE;
     const territoryPlane = new THREE.Mesh(
       new THREE.PlaneGeometry(territorySize, territorySize),
       new THREE.MeshStandardMaterial({
-        color: 0x85817b,
+        color: 0xfdfff7,
         roughness: 0.98,
         metalness: 0.02,
       }),
@@ -534,6 +544,7 @@ const THREE = window.THREE;
     });
 
     wallsSystem = createWallsSystem({
+      THREE,
       scene,
       userWalls,
       userWallSet,
@@ -543,6 +554,7 @@ const THREE = window.THREE;
       burstAt: particleSystem.burstAt,
       refreshHud,
       getPlayer: () => player,
+      getSelectedWallVariant: () => selectedInventoryItems.wall,
       createWallMesh,
     });
 

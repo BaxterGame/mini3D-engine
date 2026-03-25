@@ -13,11 +13,12 @@ const INVENTORY_CATEGORIES = [
     description: 'Construction de blocs et variantes de structure.',
     items: [
       { id: 'brick-dense', label: 'BR H2', meta: 'Solidité haute', swatch: 'linear-gradient(180deg, #2ee1b9 0%, #0da486 100%)' },
-      { id: 'brick-light', label: 'BX H1', meta: 'Version légère / rapide', swatch: 'linear-gradient(180deg, #28f5d5 0%, #0bb2b2 100%)' },
+      { id: 'brick-light', label: 'BX H1', meta: 'Version légère / rapide', swatch: 'linear-gradient(180deg, #ff8a94 0%, #d93b49 100%)' },
       { id: 'brick-wide', label: 'BZR Dense', meta: 'Solidité faible', swatch: 'linear-gradient(180deg, #e4ff2a 0%, #a7d800 100%)' },
-      { id: 'brick-mini', label: 'Mini BR Dense', meta: 'Autodestructive proto', swatch: 'linear-gradient(180deg, #ff67a4 0%, #d93f7f 100%)' },
-      { id: 'brick-standard', label: 'BR Dense', meta: 'Solidité haute', swatch: 'linear-gradient(180deg, #b22bff 0%, #7a0fd6 100%)' },
-      { id: 'brick-tall', label: 'H+3 Dense', meta: 'Solidité haute', swatch: 'linear-gradient(180deg, #35d2ff 0%, #1295dd 100%)' },
+      { id: 'brick-mini', label: 'Node Grid', meta: 'Plots + links', swatch: 'linear-gradient(180deg, #ff67a4 0%, #d93f7f 100%)' },
+      { id: 'brick-standard', label: 'Rebar Frame', meta: 'Armature / frame', swatch: 'linear-gradient(180deg, #d38aff 0%, #7a0fd6 100%)' },
+      { id: 'brick-tall', label: 'Ribbon Wall', meta: 'Flat signal band', swatch: 'linear-gradient(180deg, #baf6ff 0%, #36b8ff 100%)' },
+      { id: 'brick-capsule', label: 'Capsule Wall', meta: 'Capsules overlapped', swatch: 'linear-gradient(180deg, #eaabff 0%, #ad03fc 100%)' },
     ],
   },
   {
