@@ -271,7 +271,7 @@ const VARIANT_STYLES = Object.freeze({
     emissiveIntensity: 0.14,
     roughness: 0.38,
     metalness: 0.12,
-    surfaceY: 0.88,
+    surfaceY: 0.01,
   },
   'brick-standard': {
     type: 'rebar-frame',
@@ -459,9 +459,9 @@ function addCylinderBetween(THREE, group, geometry, material, start, end) {
 function buildNodeGridMeshes({ THREE, scene, cells, style, material }) {
   const group = new THREE.Group();
   const occupied = new Set(cells.map((cell) => keyForVariantCell(cell.x, cell.z)));
-  const nodeGeo = new THREE.CylinderGeometry(0.11, 0.14, 0.42, 10);
+  const nodeGeo = new THREE.CylinderGeometry(0.11, 0.14, 2, 10);
   const linkGeo = new THREE.CylinderGeometry(0.038, 0.038, 1, 8);
-  const capGeo = new THREE.SphereGeometry(0.12, 10, 10);
+  const capGeo = new THREE.SphereGeometry(0.11, 10, 10);
 
   for (const cell of cells) {
     const { x, z } = cell;
@@ -472,7 +472,7 @@ function buildNodeGridMeshes({ THREE, scene, cells, style, material }) {
     group.add(node);
 
     const cap = new THREE.Mesh(capGeo, material);
-    cap.position.set(x, style.surfaceY + 0.43, z);
+    cap.position.set(x, style.surfaceY + 1.35, z);
     cap.castShadow = true;
     cap.receiveShadow = true;
     group.add(cap);
@@ -483,8 +483,8 @@ function buildNodeGridMeshes({ THREE, scene, cells, style, material }) {
         group,
         linkGeo,
         material,
-        new THREE.Vector3(x, style.surfaceY + 0.34, z),
-        new THREE.Vector3(x + 1, style.surfaceY + 0.34, z),
+        new THREE.Vector3(x, style.surfaceY + 0.8, z),
+        new THREE.Vector3(x + 1, style.surfaceY + 0.8, z),
       );
     }
     if (occupied.has(keyForVariantCell(x, z + 1))) {
@@ -493,8 +493,8 @@ function buildNodeGridMeshes({ THREE, scene, cells, style, material }) {
         group,
         linkGeo,
         material,
-        new THREE.Vector3(x, style.surfaceY + 0.34, z),
-        new THREE.Vector3(x, style.surfaceY + 0.34, z + 1),
+        new THREE.Vector3(x, style.surfaceY + 0.8, z),
+        new THREE.Vector3(x, style.surfaceY + 0.8, z + 1),
       );
     }
   }
