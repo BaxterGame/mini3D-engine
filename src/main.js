@@ -121,7 +121,12 @@ const THREE = window.THREE;
         if (selection?.category?.id && selection?.item?.id) {
           selectedInventoryItems[selection.category.id] = selection.item.id;
         }
-        if (modeSystem && typeof modeSystem.setMode === 'function') {
+        if (
+          selection?.categoryAvailable
+          && modeSystem
+          && typeof modeSystem.setMode === 'function'
+          && selection?.category?.id
+        ) {
           modeSystem.setMode(selection.category.id);
         }
         refreshHud();
@@ -331,6 +336,7 @@ const THREE = window.THREE;
     inventoryMenu.sync({
       open: inventoryOpen,
       modeId: modeSystem ? modeSystem.getCurrentMode() : 'wall',
+      availableCategoryIds: modeSystem ? modeSystem.getAvailableModes() : null,
     });
   }
 
@@ -351,6 +357,7 @@ const THREE = window.THREE;
       modeSystem.ensureCurrentModeAvailable();
     }
 
+    updateInventoryUi();
     refreshHud();
   }
 
@@ -367,19 +374,19 @@ const THREE = window.THREE;
     if (inventoryOpen) {
       pendingWheelZoomSteps = 0;
 
-      if (actions.consumeZoomIn()) {
+      if (actions.consumeInventoryUp()) {
         inventoryMenu.moveVertical(-1);
       }
 
-      if (actions.consumeZoomOut()) {
+      if (actions.consumeInventoryDown()) {
         inventoryMenu.moveVertical(1);
       }
 
-      if (actions.consumeRotateLeft()) {
+      if (actions.consumeInventoryLeft()) {
         inventoryMenu.moveHorizontal(-1);
       }
 
-      if (actions.consumeRotateRight()) {
+      if (actions.consumeInventoryRight()) {
         inventoryMenu.moveHorizontal(1);
       }
 
@@ -592,7 +599,7 @@ const THREE = window.THREE;
     toggleProjectionBtn.style.display = 'none';
     if (hintText) {
       hintText.textContent =
-        'WASD = déplacement • E = inventaire • inventaire : flèches = navigation • gameplay : ↑ / ↓ = zoom, ← / → = rotation 45° • Q = cycle murs / projectile / aqua / véhicule • molette = zoom • Espace = action contextuelle • M = mission / exploration • C = cycle caméra • R = relancer';
+        'WASD = déplacement • E = inventaire • inventaire : flèches / WASD = navigation • gameplay : ↑ / ↓ = zoom, ← / → = rotation 45° • Q = cycle murs / projectile / aqua / véhicule • molette = zoom • Espace = action contextuelle • M = mission / exploration • C = cycle caméra • R = relancer';
     }
 
     toggleSandboxBtn.addEventListener('click', () => {

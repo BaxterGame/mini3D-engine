@@ -275,7 +275,7 @@
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 0;
-      align-items: center;e
+      align-items: center;
     }
 
     .inventoryCategoryButton {
@@ -301,6 +301,14 @@
       background: rgba(255,255,255,0.08);
       border-color: rgba(255,255,255,0.18);
       box-shadow: inset 2px 0 0 rgba(255,255,255,0.22);
+    }
+
+    .inventoryCategoryButton.is-disabled {
+      opacity: 0.62;
+    }
+
+    .inventoryCategoryButton.is-disabled .inventoryCategoryLabel {
+      color: rgba(255,255,255,0.62);
     }
 
     .inventoryCategoryThumb {
@@ -445,6 +453,18 @@
       background: rgba(255,255,255,0.07);
       border-color: rgba(255,255,255,0.16);
       box-shadow: inset 2px 0 0 rgba(255,255,255,0.92);
+    }
+
+    .inventoryListRow.is-disabled {
+      opacity: 0.52;
+    }
+
+    .inventoryListRow.is-disabled .inventoryListSwatch {
+      filter: grayscale(0.45);
+    }
+
+    .inventoryListRow.is-disabled .inventoryListTextMeta {
+      color: rgba(216, 228, 248, 0.7);
     }
 
     .inventoryListSwatch {
@@ -594,7 +614,7 @@
           </div>
         </div>
 
-        <div id="inventoryHelp" class="inventoryHelpMini">← → catégories • ↑ ↓ variantes • E fermer</div>
+        <div id="inventoryHelp" class="inventoryHelpMini">← → / A D catégories • ↑ ↓ / W S variantes • E fermer</div>
       </div>
     </div>
 
@@ -624,7 +644,7 @@
         </div>
       </div>
 
-      <div id="hint" class="card hintCard">WASD = déplacement • E = inventaire • inventaire : flèches = navigation • gameplay : ↑ / ↓ = zoom, ← / → = rotation 45° • Q = cycle modes • molette = zoom • Espace = action contextuelle • M = mission / exploration • C = cycle caméra • R = relancer</div>
+      <div id="hint" class="card hintCard">WASD = déplacement • E = inventaire • inventaire : flèches / WASD = navigation • gameplay : ↑ / ↓ = zoom, ← / → = rotation 45° • Q = cycle modes • molette = zoom • Espace = action contextuelle • M = mission / exploration • C = cycle caméra • R = relancer</div>
     </div>
   </div>
 

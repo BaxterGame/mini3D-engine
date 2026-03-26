@@ -59,6 +59,18 @@ export function createActionController(input) {
     consumeZoomOut() {
       return input.consumePress('arrowdown');
     },
+    consumeInventoryLeft() {
+      return input.consumePress('arrowleft') || input.consumePress('a');
+    },
+    consumeInventoryRight() {
+      return input.consumePress('arrowright') || input.consumePress('d');
+    },
+    consumeInventoryUp() {
+      return input.consumePress('arrowup') || input.consumePress('w');
+    },
+    consumeInventoryDown() {
+      return input.consumePress('arrowdown') || input.consumePress('s');
+    },
     consumeInventoryToggle() {
       return input.consumePress('e');
     },

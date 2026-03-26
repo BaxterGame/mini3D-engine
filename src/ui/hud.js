@@ -30,7 +30,7 @@ export function createHud(els, config) {
 
     if (model.inventoryOpen) {
       const selection = model.inventorySelectionLabel ? ` • ${model.inventorySelectionLabel}` : '';
-      els.statusText.textContent = `Inventaire ouvert • flèches = naviguer • E = fermer${selection}${modeSuffix}`;
+      els.statusText.textContent = `Inventaire ouvert • flèches / WASD = naviguer • E = fermer${selection}${modeSuffix}`;
     } else if (model.followMode === 'top') {
       els.statusText.textContent = `${modePrefix} • Top = lecture claire et déplacement libre${modeSuffix}`;
     } else if (model.cameraProjectionMode === 'iso') {
