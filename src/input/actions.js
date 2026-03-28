@@ -71,6 +71,9 @@ export function createActionController(input) {
     consumeInventoryDown() {
       return input.consumePress('arrowdown') || input.consumePress('s');
     },
+    consumeInventoryConfirm() {
+      return input.consumePress('enter');
+    },
     consumeInventoryToggle() {
       return input.consumePress('e');
     },

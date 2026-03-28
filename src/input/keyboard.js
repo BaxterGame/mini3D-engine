@@ -7,15 +7,17 @@
 // - clic gauche souris = action principale (build / fire)
 const HANDLED_KEYS = new Set([
   'arrowup', 'arrowdown', 'arrowleft', 'arrowright',
-  'space', 'w', 'a', 's', 'd', 'q', 'e',
+  'space', 'enter', 'w', 'a', 's', 'd', 'q', 'e',
   'shift', 'r', 'v', 'c', 'm', 'j', 'l', 'x',
 ]);
 
 function normalizeKey(event) {
   if (event.code === 'Space') return 'space';
+  if (event.code === 'Enter' || event.code === 'NumpadEnter') return 'enter';
 
   const raw = String(event.key || '').toLowerCase();
   if (raw === ' ' || raw === 'spacebar') return 'space';
+  if (raw === 'enter' || raw === 'return') return 'enter';
   return raw;
 }
 

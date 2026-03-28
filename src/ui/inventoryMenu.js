@@ -1,7 +1,6 @@
-// mini-engine v0.2j — inventory UI
-// Objectif : garder le niveau 1 toujours accessible, dissocier
-// disponibilité des catégories et disponibilité réelle de leur contenu,
-// et unifier la navigation entre Mission / Exploration.
+// mini-engine v0.3a — inventory UI
+// Niveau 1 toujours accessible + support d'entrées dynamiques
+// (custom import / custom assets) dans le sous-menu Wall.
 
 const INVENTORY_CATEGORIES = [
   {
@@ -142,6 +141,8 @@ function createListRow(item, { isActive = false, isDisabled = false, metaText = 
 }
 
 export function createInventoryMenu(els, callbacks = {}) {
+  const dynamicItemsByCategory = Object.fromEntries(INVENTORY_CATEGORIES.map((category) => [category.id, []]));
+
   const state = {
     open: false,
     categoryIndex: 0,
@@ -157,6 +158,13 @@ export function createInventoryMenu(els, callbacks = {}) {
     listViewport: els.submenuGrid ? els.submenuGrid.parentElement : null,
   };
 
+  function getCategoryItems(categoryId) {
+    const category = INVENTORY_CATEGORIES.find((entry) => entry.id === categoryId);
+    const baseItems = Array.isArray(category?.items) ? category.items : [];
+    const dynamicItems = Array.isArray(dynamicItemsByCategory[categoryId]) ? dynamicItemsByCategory[categoryId] : [];
+    return [...baseItems, ...dynamicItems];
+  }
+
   function getCurrentCategory() {
     return INVENTORY_CATEGORIES[state.categoryIndex] || INVENTORY_CATEGORIES[0];
   }
@@ -166,12 +174,13 @@ export function createInventoryMenu(els, callbacks = {}) {
   }
 
   function getCurrentItems() {
-    return getCurrentCategory().items || [];
+    return getCategoryItems(getCurrentCategory().id);
   }
 
   function getCurrentItemIndex() {
     const category = getCurrentCategory();
-    return clampIndex(state.itemIndexByCategory[category.id] || 0, Math.max(category.items.length, 1));
+    const items = getCategoryItems(category.id);
+    return clampIndex(state.itemIndexByCategory[category.id] || 0, Math.max(items.length, 1));
   }
 
   function getCurrentItem() {
@@ -196,6 +205,18 @@ export function createInventoryMenu(els, callbacks = {}) {
       categoryAvailable,
       itemAvailable: categoryAvailable,
     });
+  }
+
+  function emitSelectionActivate() {
+    if (typeof callbacks.onItemActivate !== 'function') return false;
+    const category = getCurrentCategory();
+    const categoryAvailable = isCategoryAvailable(category.id);
+    return callbacks.onItemActivate({
+      category,
+      item: getCurrentItem(),
+      categoryAvailable,
+      itemAvailable: categoryAvailable,
+    }) === true;
   }
 
   function updateArrowVisibility() {
@@ -275,14 +296,20 @@ export function createInventoryMenu(els, callbacks = {}) {
     items.forEach((item, index) => {
       const row = createListRow(item, {
         isActive: index === activeIndex,
-        isDisabled: !categoryAvailable,
-        metaText: categoryAvailable ? (index === activeIndex ? item.meta || '' : '') : 'Inactive dans ce contexte',
+        isDisabled: !categoryAvailable || !!item.disabled,
+        metaText: !categoryAvailable
+          ? 'Inactive dans ce contexte'
+          : (index === activeIndex ? item.meta || '' : ''),
       });
       row.dataset.itemIndex = String(index);
       row.addEventListener('click', () => {
+        const isAlreadyActive = state.itemIndexByCategory[category.id] === index;
         state.itemIndexByCategory[category.id] = index;
         render();
         emitSelectionChange();
+        if (isAlreadyActive) {
+          emitSelectionActivate();
+        }
       });
       els.submenuGrid.appendChild(row);
     });
@@ -327,7 +354,7 @@ export function createInventoryMenu(els, callbacks = {}) {
       els.selectionPillEl.textContent = item ? item.label : category.modeLabel;
     }
     if (els.helpEl) {
-      els.helpEl.textContent = '← → / A D = catégories • ↑ ↓ / W S = variantes • E = fermer';
+      els.helpEl.textContent = '← → / A D = catégories • ↑ ↓ / W S = variantes • Enter = valider • E = fermer';
     }
 
     renderCategoryRail();
@@ -378,6 +405,32 @@ export function createInventoryMenu(els, callbacks = {}) {
     render();
   }
 
+  function setCategoryItems(categoryId, items) {
+    if (!ALL_CATEGORY_IDS.includes(categoryId)) return;
+    dynamicItemsByCategory[categoryId] = Array.isArray(items) ? items.slice() : [];
+
+    const categoryItems = getCategoryItems(categoryId);
+    const maxIndex = Math.max(0, categoryItems.length - 1);
+    const currentIndex = state.itemIndexByCategory[categoryId] || 0;
+    state.itemIndexByCategory[categoryId] = Math.min(currentIndex, maxIndex);
+    render();
+  }
+
+  function selectItem(categoryId, itemId) {
+    const nextCategoryIndex = getCategoryIndexById(categoryId);
+    if (nextCategoryIndex < 0) return false;
+
+    const items = getCategoryItems(categoryId);
+    const nextItemIndex = items.findIndex((item) => item.id === itemId);
+    if (nextItemIndex < 0) return false;
+
+    state.categoryIndex = nextCategoryIndex;
+    state.itemIndexByCategory[categoryId] = nextItemIndex;
+    render();
+    emitSelectionChange();
+    return true;
+  }
+
   if (els.closeButton) {
     els.closeButton.addEventListener('click', () => {
       if (typeof callbacks.onCloseRequest === 'function') {
@@ -412,5 +465,16 @@ export function createInventoryMenu(els, callbacks = {}) {
     moveHorizontal,
     moveVertical,
     getSelectionSummary,
+    getCurrentSelection() {
+      const category = getCurrentCategory();
+      return {
+        category,
+        item: getCurrentItem(),
+        categoryAvailable: isCategoryAvailable(category.id),
+      };
+    },
+    activateSelection: emitSelectionActivate,
+    setCategoryItems,
+    selectItem,
   };
 }

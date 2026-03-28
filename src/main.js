@@ -28,8 +28,10 @@ import { createCoinsSystem } from './entities/coins.js';
 import { createParticleSystem } from './fx/particles.js';
 import { createPlayerModesSystem } from './entities/playerModes.js';
 import { createAssetLibrary } from './assets/library.js';
+import { createCustomAssetRegistry } from './assets/customAssets.js';
 import { createGameLoop } from './game/gameLoop.js';
 import { createResetSystem } from './game/reset.js';
+import { createCustomAssetImportDialog } from './ui/customAssetImportDialog.js';
 
 if (location.protocol === 'file:') {
   const box = document.getElementById('error');
@@ -72,6 +74,13 @@ const THREE = window.THREE;
   const inventoryCategoryGrid = document.getElementById('inventoryCategoryGrid');
   const inventorySubmenuGrid = document.getElementById('inventorySubmenuGrid');
   const inventoryCloseBtn = document.getElementById('inventoryCloseBtn');
+  const customAssetDialogRoot = document.getElementById('customAssetDialog');
+  const customAssetDialogCloseBtn = document.getElementById('customAssetDialogCloseBtn');
+  const customAssetFileBtn = document.getElementById('customAssetFileBtn');
+  const customAssetFileInput = document.getElementById('customAssetFileInput');
+  const customAssetDropzone = document.getElementById('customAssetDropzone');
+  const customAssetList = document.getElementById('customAssetList');
+  const customAssetStatus = document.getElementById('customAssetStatus');
   const toggleViewBtn = document.getElementById('toggleViewBtn');
   const toggleProjectionBtn = document.getElementById('toggleProjectionBtn');
   const toggleSandboxBtn = document.getElementById('toggleSandboxBtn');
@@ -102,6 +111,12 @@ const THREE = window.THREE;
     projectile: 'proj-light',
     vehicle: 'vehicle-car',
   };
+  let lastConcreteWallSelection = selectedInventoryItems.wall;
+
+  const customAssetRegistry = createCustomAssetRegistry({ THREE });
+  customAssetRegistry.loadPersisted();
+
+  let customImportDialog = null;
 
   const inventoryMenu = createInventoryMenu(
     {
@@ -118,7 +133,18 @@ const THREE = window.THREE;
     },
     {
       onSelectionChange(selection) {
-        if (selection?.category?.id && selection?.item?.id) {
+        if (selection?.category?.id === 'wall' && selection?.item?.id) {
+          const wallItemId = selection.item.id;
+          if (customAssetRegistry.isImportItem(wallItemId)) {
+            refreshHud();
+            return;
+          }
+
+          selectedInventoryItems.wall = wallItemId;
+          if (!customAssetRegistry.isRandomItem(wallItemId)) {
+            lastConcreteWallSelection = wallItemId;
+          }
+        } else if (selection?.category?.id && selection?.item?.id) {
           selectedInventoryItems[selection.category.id] = selection.item.id;
         }
         if (
@@ -131,11 +157,62 @@ const THREE = window.THREE;
         }
         refreshHud();
       },
+      onItemActivate(selection) {
+        if (!(selection?.category?.id === 'wall' && selection?.item?.id)) return false;
+        if (!customAssetRegistry.isImportItem(selection.item.id)) return false;
+        if (customImportDialog && !customImportDialog.isOpen()) {
+          customImportDialog.open();
+        }
+        refreshHud();
+        return true;
+      },
       onCloseRequest() {
         setInventoryOpen(false);
       },
     },
   );
+
+  function syncCustomWallInventory() {
+    const wallCustomItems = customAssetRegistry.getMenuItems();
+    inventoryMenu.setCategoryItems('wall', wallCustomItems);
+    if (customImportDialog) {
+      customImportDialog.updateList(customAssetRegistry.listRecords());
+    }
+  }
+
+  customImportDialog = createCustomAssetImportDialog(
+    {
+      root: customAssetDialogRoot,
+      closeBtn: customAssetDialogCloseBtn,
+      fileBtn: customAssetFileBtn,
+      fileInput: customAssetFileInput,
+      dropzone: customAssetDropzone,
+      assetList: customAssetList,
+      status: customAssetStatus,
+    },
+    {
+      async onFilesSelected(files) {
+        const result = await customAssetRegistry.importFiles(files);
+        syncCustomWallInventory();
+
+        const imported = result?.imported || [];
+        if (imported.length) {
+          const nextSelection = `wall-custom-asset:${imported[imported.length - 1].id}`;
+          selectedInventoryItems.wall = nextSelection;
+          lastConcreteWallSelection = nextSelection;
+          inventoryMenu.selectItem('wall', nextSelection);
+        }
+
+        refreshHud();
+        return result;
+      },
+      onClose() {
+        refreshHud();
+      },
+    },
+  );
+
+  syncCustomWallInventory();
 
   let renderer;
   let scene;
@@ -371,23 +448,45 @@ const THREE = window.THREE;
       updateInventoryUi();
     }
 
+    if (customImportDialog && customImportDialog.isOpen()) {
+      pendingWheelZoomSteps = 0;
+      return;
+    }
+
     if (inventoryOpen) {
       pendingWheelZoomSteps = 0;
 
+      const inventorySelection = inventoryMenu.getCurrentSelection();
+      const onCustomImport = inventorySelection?.category?.id === 'wall'
+        && customAssetRegistry.isImportItem(inventorySelection?.item?.id);
+
       if (actions.consumeInventoryUp()) {
         inventoryMenu.moveVertical(-1);
+        return;
       }
 
       if (actions.consumeInventoryDown()) {
         inventoryMenu.moveVertical(1);
+        return;
+      }
+
+      if (actions.consumeInventoryConfirm()) {
+        inventoryMenu.activateSelection();
+        return;
       }
 
       if (actions.consumeInventoryLeft()) {
         inventoryMenu.moveHorizontal(-1);
+        return;
       }
 
       if (actions.consumeInventoryRight()) {
-        inventoryMenu.moveHorizontal(1);
+        if (onCustomImport) {
+          inventoryMenu.activateSelection();
+        } else {
+          inventoryMenu.moveHorizontal(1);
+        }
+        return;
       }
 
       return;
@@ -562,6 +661,9 @@ const THREE = window.THREE;
       refreshHud,
       getPlayer: () => player,
       getSelectedWallVariant: () => selectedInventoryItems.wall,
+      resolveSelectedWallVariant: (variantId) => customAssetRegistry.resolveWallSelection(variantId),
+      isCustomWallVariant: (variantId) => customAssetRegistry.isCustomVariant(variantId),
+      createCustomWallMesh: (variantId, cell) => customAssetRegistry.createWallInstance(variantId, cell),
       createWallMesh,
     });
 
