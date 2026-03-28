@@ -792,6 +792,9 @@ export function createWallsSystem({
   refreshHud,
   getPlayer,
   getSelectedWallVariant,
+  resolveSelectedWallVariant,
+  isCustomWallVariant,
+  createCustomWallMesh,
   createWallMesh,
 }) {
   let lastWallActionCellKey = '';
@@ -799,8 +802,12 @@ export function createWallsSystem({
   const materialCache = new Map();
 
   function getCurrentVariant() {
-    const variant = typeof getSelectedWallVariant === 'function' ? getSelectedWallVariant() : 'brick-dense';
-    return variant || 'brick-dense';
+    const selectedVariant = typeof getSelectedWallVariant === 'function' ? getSelectedWallVariant() : 'brick-dense';
+    if (typeof resolveSelectedWallVariant === 'function') {
+      const resolvedVariant = resolveSelectedWallVariant(selectedVariant);
+      return resolvedVariant || 'brick-dense';
+    }
+    return selectedVariant || 'brick-dense';
   }
 
   function getMaterialForVariant(variantId) {
@@ -847,8 +854,12 @@ export function createWallsSystem({
     for (const [variantId, cells] of byVariant) {
       const style = getVariantStyle(variantId);
       if (!style) {
+        const isCustomVariant = typeof isCustomWallVariant === 'function' && isCustomWallVariant(variantId);
         for (const cell of cells) {
-          const mesh = createWallMesh(cell.x, cell.z, false);
+          const mesh = isCustomVariant && typeof createCustomWallMesh === 'function'
+            ? createCustomWallMesh(variantId, { x: cell.x, z: cell.z })
+            : createWallMesh(cell.x, cell.z, false);
+          if (!mesh) continue;
           scene.add(mesh);
           renderedEntries.push({ mesh, disposeGeometry: false, disposeMaterial: false });
           cell.mesh = mesh;

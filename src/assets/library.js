@@ -98,7 +98,7 @@ function resolveIndex(index, listLength) {
   return value >= 0 ? value : listLength + value;
 }
 
-function parseObjGeometry(text, THREE) {
+export function parseObjGeometry(text, THREE) {
   const positions = [[0, 0, 0]];
   const uvs = [[0, 0]];
   const outPositions = [];
@@ -150,6 +150,10 @@ function parseObjGeometry(text, THREE) {
         outUvs.push(uv[0], uv[1]);
       }
     }
+  }
+
+  if (!outPositions.length) {
+    throw new Error('OBJ sans géométrie exploitable.');
   }
 
   const geometry = new THREE.BufferGeometry();

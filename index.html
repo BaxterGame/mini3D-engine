@@ -528,6 +528,161 @@
       }
     }
 
+
+    #customAssetDialog {
+      position: fixed;
+      inset: 0;
+      z-index: 28;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: rgba(2, 5, 10, 0.72);
+      backdrop-filter: blur(8px);
+      pointer-events: auto;
+    }
+
+    .customImportCard {
+      width: min(720px, calc(100vw - 32px));
+      max-height: min(84vh, 760px);
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 14px;
+      padding: 16px;
+      background: rgba(10, 15, 24, 0.94);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 24px 70px rgba(0,0,0,0.45);
+    }
+
+    .customImportMain,
+    .customImportSide {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .customImportHeader {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .customImportHeaderTitle {
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #f3f7ff;
+    }
+
+    .customImportHeaderMeta {
+      margin-top: 4px;
+      color: #b8c7da;
+      font-size: 0.82rem;
+      line-height: 1.35;
+    }
+
+    .customImportClose {
+      flex: 0 0 auto;
+      border-radius: 0;
+      padding-inline: 10px;
+    }
+
+    .customImportDropzone {
+      min-height: 240px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border: 1px dashed rgba(255,255,255,0.24);
+      background: rgba(255,255,255,0.03);
+      text-align: center;
+      transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
+    }
+
+    .customImportDropzone.is-dragover {
+      border-color: rgba(116, 246, 255, 0.9);
+      background: rgba(116, 246, 255, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .customImportDropzoneTitle {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    .customImportDropzoneMeta,
+    .customImportStatus {
+      color: #c2cfde;
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+
+    .customImportActions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .customImportListCard {
+      min-height: 0;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+      padding: 12px;
+      overflow: hidden;
+    }
+
+    .customImportListTitle {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #8ca0bb;
+      margin-bottom: 10px;
+    }
+
+    #customAssetList {
+      display: grid;
+      gap: 8px;
+      max-height: 360px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .customImportListRow,
+    .customImportListEmpty {
+      padding: 10px 10px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.03);
+    }
+
+    .customImportListName {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #ffffff;
+    }
+
+    .customImportListMeta {
+      margin-top: 3px;
+      font-size: 0.68rem;
+      color: #c7d3e3;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    @media (max-width: 860px) {
+      .customImportCard {
+        grid-template-columns: 1fr;
+      }
+    }
+
     #error {
       position: fixed;
       left: 50%;
@@ -614,7 +769,7 @@
           </div>
         </div>
 
-        <div id="inventoryHelp" class="inventoryHelpMini">← → / A D catégories • ↑ ↓ / W S variantes • E fermer</div>
+        <div id="inventoryHelp" class="inventoryHelpMini">← → / A D catégories • ↑ ↓ / W S variantes • Enter valider • E fermer</div>
       </div>
     </div>
 
@@ -645,6 +800,38 @@
       </div>
 
       <div id="hint" class="card hintCard">WASD = déplacement • E = inventaire • inventaire : flèches / WASD = navigation • gameplay : ↑ / ↓ = zoom, ← / → = rotation 45° • Q = cycle modes • molette = zoom • Espace = action contextuelle • M = mission / exploration • C = cycle caméra • R = relancer</div>
+    </div>
+  </div>
+
+
+  <div id="customAssetDialog" aria-hidden="true" hidden>
+    <div class="customImportCard">
+      <div class="customImportMain">
+        <div class="customImportHeader">
+          <div>
+            <div class="customImportHeaderTitle">Custom Import</div>
+            <div class="customImportHeaderMeta">Import rapide d’assets 3D custom pour le sous-menu <strong>Wall</strong>. Première version : format <strong>.obj</strong> uniquement.</div>
+          </div>
+          <button id="customAssetDialogCloseBtn" class="btn customImportClose">Fermer</button>
+        </div>
+
+        <div id="customAssetDropzone" class="customImportDropzone">
+          <div class="customImportDropzoneTitle">Glisser / déposer des fichiers .obj</div>
+          <div class="customImportDropzoneMeta">Les assets sont stockés côté navigateur dans un espace logique <strong>custom_asset</strong> et réapparaissent au rechargement.</div>
+          <div class="customImportActions">
+            <button id="customAssetFileBtn" class="btn" type="button">File Import (.obj)</button>
+            <input id="customAssetFileInput" type="file" accept=".obj" multiple hidden />
+          </div>
+          <div id="customAssetStatus" class="customImportStatus">Formats supportés pour cette première version : .obj</div>
+        </div>
+      </div>
+
+      <div class="customImportSide">
+        <div class="customImportListCard">
+          <div class="customImportListTitle">custom_asset</div>
+          <div id="customAssetList"></div>
+        </div>
+      </div>
     </div>
   </div>
 
