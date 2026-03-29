@@ -2,9 +2,22 @@
 // Ajoute un rappel léger du mode player et de l'état d'inventaire.
 
 export function createHud(els, config) {
+  function formatStackInfo(model) {
+    if (!model || model.playerModeLabel !== 'WALL') return '';
+    const level = Number.isFinite(model.wallStackDisplayLevel)
+      ? model.wallStackDisplayLevel
+      : (Number.isFinite(model.wallStackLevel) ? model.wallStackLevel : 0);
+    const step = Number.isFinite(model.wallStackStep) ? model.wallStackStep : 0;
+    if (model.wallDestroyMode) {
+      return ` • DESTROY • Y ${level} • hold Space • E • ↑/↓ cible`;
+    }
+    return ` • BUILD • Y ${level} • pas ${step.toFixed(2)} • hold Space • ↑/↓ cible • E destroy`;
+  }
+
   function syncViewUi(model) {
     const modePrefix = model.worldMode === 'exploration' ? 'Exploration' : 'Mission';
     const modeSuffix = model.playerModeLabel ? ` • Mode ${model.playerModeLabel}` : '';
+    const stackSuffix = formatStackInfo(model);
 
     if (model.followMode === 'top') {
       els.viewValue.textContent = 'TOP';
@@ -30,13 +43,13 @@ export function createHud(els, config) {
 
     if (model.inventoryOpen) {
       const selection = model.inventorySelectionLabel ? ` • ${model.inventorySelectionLabel}` : '';
-      els.statusText.textContent = `Inventaire ouvert • flèches / WASD = naviguer • E = fermer${selection}${modeSuffix}`;
+      els.statusText.textContent = `Inventaire ouvert • flèches / WASD = naviguer • R = fermer${selection}${modeSuffix}`;
     } else if (model.followMode === 'top') {
-      els.statusText.textContent = `${modePrefix} • Top = lecture claire et déplacement libre${modeSuffix}`;
+      els.statusText.textContent = `${modePrefix} • Top = lecture claire et déplacement libre${modeSuffix}${stackSuffix}`;
     } else if (model.cameraProjectionMode === 'iso') {
-      els.statusText.textContent = `${modePrefix} • Caméra isométrique = lecture douce, style maquette${modeSuffix}`;
+      els.statusText.textContent = `${modePrefix} • Caméra isométrique = lecture douce, style maquette${modeSuffix}${stackSuffix}`;
     } else {
-      els.statusText.textContent = `${modePrefix} • Caméra perspective = suivi plus immersif${modeSuffix}`;
+      els.statusText.textContent = `${modePrefix} • Caméra perspective = suivi plus immersif${modeSuffix}${stackSuffix}`;
     }
 
     els.toggleSandboxBtn.classList.toggle('is-active', model.worldMode === 'exploration');

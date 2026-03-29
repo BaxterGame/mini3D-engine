@@ -220,7 +220,7 @@ function createFallbackProjectileMesh(THREE) {
 
 const AQUA_STYLE = Object.freeze({
   cellHalf: 0.5,
-  surfaceY: 0.14,
+  surfaceY: 0.0,
   baseLift: 0.036,
   waveAmpA: 0.013,
   waveAmpB: 0.009,
@@ -848,9 +848,6 @@ export function createPlayerModesSystem({
 
     switch (currentMode) {
       case 'wall':
-        if (wallsSystem && typeof wallsSystem.toggleWallAtPlayer === 'function') {
-          wallsSystem.toggleWallAtPlayer();
-        }
         break;
       case 'projectile':
         spawnProjectile();

@@ -354,7 +354,7 @@ export function createInventoryMenu(els, callbacks = {}) {
       els.selectionPillEl.textContent = item ? item.label : category.modeLabel;
     }
     if (els.helpEl) {
-      els.helpEl.textContent = '← → / A D = catégories • ↑ ↓ / W S = variantes • Enter = valider • E = fermer';
+      els.helpEl.textContent = '← → / A D = catégories • ↑ ↓ / W S = variantes • Enter = valider • R = fermer';
     }
 
     renderCategoryRail();

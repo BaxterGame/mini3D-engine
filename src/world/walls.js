@@ -775,9 +775,27 @@ export function createWallMeshFactory({ THREE, shared }) {
     const mesh = new THREE.Mesh(shared.wallGeo, isBorder ? shared.borderWallMat : shared.userWallMat);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    mesh.position.set(x, 1.1, z);
+    mesh.position.set(x, 0.2, z);
     return mesh;
   };
+}
+
+const WALL_ACTION_REPEAT_INITIAL_DELAY = 1.0;
+const WALL_ACTION_REPEAT_DELAY = 0.12;
+const WALL_HEIGHT_FALLBACK = 0.4;
+const WALL_BASE_PRECISION = 1000;
+const WALL_BASE_EPSILON = 1 / WALL_BASE_PRECISION;
+
+function normalizeWallBaseY(value) {
+  return Math.round((Number(value) || 0) * WALL_BASE_PRECISION) / WALL_BASE_PRECISION;
+}
+
+function makeWallActionKey(x, z, baseY) {
+  return `${x}|${z}|${normalizeWallBaseY(baseY).toFixed(3)}`;
+}
+
+function areSameWallBase(a, b) {
+  return Math.abs(normalizeWallBaseY(a) - normalizeWallBaseY(b)) <= WALL_BASE_EPSILON;
 }
 
 export function createWallsSystem({
@@ -795,19 +813,37 @@ export function createWallsSystem({
   resolveSelectedWallVariant,
   isCustomWallVariant,
   createCustomWallMesh,
+  getCustomWallHeight,
   createWallMesh,
 }) {
   let lastWallActionCellKey = '';
+  let destroyMode = false;
+  let actionRepeatTimer = 0;
+  let actionRepeatStarted = false;
+  let primaryActionPrimed = false;
+  let primaryActionPerformed = false;
+  let destroySelectionOffsetFromTop = 0;
+  let destroySelectionCellKey = '';
+  let buildSelectionOffsetFromTop = 0;
   const renderedEntries = [];
   const materialCache = new Map();
+  const variantHeightCache = new Map();
+
+  function getSelectedVariantId() {
+    const selectedVariant = typeof getSelectedWallVariant === 'function' ? getSelectedWallVariant() : 'brick-dense';
+    return selectedVariant || 'brick-dense';
+  }
+
+  function resolveVariantId(variantId) {
+    if (typeof resolveSelectedWallVariant === 'function') {
+      const resolvedVariant = resolveSelectedWallVariant(variantId);
+      return resolvedVariant || variantId || 'brick-dense';
+    }
+    return variantId || 'brick-dense';
+  }
 
   function getCurrentVariant() {
-    const selectedVariant = typeof getSelectedWallVariant === 'function' ? getSelectedWallVariant() : 'brick-dense';
-    if (typeof resolveSelectedWallVariant === 'function') {
-      const resolvedVariant = resolveSelectedWallVariant(selectedVariant);
-      return resolvedVariant || 'brick-dense';
-    }
-    return selectedVariant || 'brick-dense';
+    return resolveVariantId(getSelectedVariantId());
   }
 
   function getMaterialForVariant(variantId) {
@@ -819,23 +855,146 @@ export function createWallsSystem({
     return materialCache.get(variantId);
   }
 
+  function disposeRenderedEntry(entry) {
+    scene.remove(entry.mesh);
+    if (entry.disposeGeometry && entry.mesh.geometry) entry.mesh.geometry.dispose();
+    if (entry.extraGeometries) entry.extraGeometries.forEach((geo) => geo.dispose());
+    if (entry.disposeMaterial && entry.mesh.material) {
+      if (Array.isArray(entry.mesh.material)) entry.mesh.material.forEach((mat) => mat.dispose());
+      else entry.mesh.material.dispose();
+    }
+    if (entry.extraMaterials) entry.extraMaterials.forEach((mat) => mat.dispose());
+  }
+
   function clearRenderedEntries() {
     while (renderedEntries.length) {
-      const entry = renderedEntries.pop();
-      scene.remove(entry.mesh);
-      if (entry.disposeGeometry && entry.mesh.geometry) entry.mesh.geometry.dispose();
-      if (entry.extraGeometries) entry.extraGeometries.forEach((geo) => geo.dispose());
-      if (entry.disposeMaterial && entry.mesh.material) {
-        if (Array.isArray(entry.mesh.material)) entry.mesh.material.forEach((mat) => mat.dispose());
-        else entry.mesh.material.dispose();
-      }
-      if (entry.extraMaterials) entry.extraMaterials.forEach((mat) => mat.dispose());
+      disposeRenderedEntry(renderedEntries.pop());
     }
   }
 
-  function assignMeshesToCells(cells, mesh) {
+
+  function normalizeBuiltMeshBaseY(built) {
+    const object = built?.mesh;
+    if (!object) return 0;
+
+    object.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(object);
+    if (box.isEmpty()) return 0;
+
+    const offsetY = normalizeWallBaseY(box.min.y);
+    if (Math.abs(offsetY) > WALL_BASE_EPSILON) {
+      object.position.y -= offsetY;
+      object.updateMatrixWorld(true);
+    }
+
+    return offsetY;
+  }
+
+  function getMeasuredHeightFromBuiltMeshes(builtMeshes, measureScene) {
+    let minY = Number.POSITIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+
+    measureScene.updateMatrixWorld(true);
+    for (const built of builtMeshes) {
+      normalizeBuiltMeshBaseY(built);
+      built.mesh.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(built.mesh);
+      if (box.isEmpty()) continue;
+      minY = Math.min(minY, box.min.y);
+      maxY = Math.max(maxY, box.max.y);
+    }
+
+    for (const built of builtMeshes) {
+      if (built.mesh.parent) built.mesh.parent.remove(built.mesh);
+      if (built.disposeGeometry && built.mesh.geometry) built.mesh.geometry.dispose();
+      if (built.extraGeometries) built.extraGeometries.forEach((geo) => geo.dispose());
+      if (built.disposeMaterial && built.mesh.material) {
+        if (Array.isArray(built.mesh.material)) built.mesh.material.forEach((mat) => mat.dispose());
+        else built.mesh.material.dispose();
+      }
+      if (built.extraMaterials) built.extraMaterials.forEach((mat) => mat.dispose());
+    }
+
+    if (!Number.isFinite(minY) || !Number.isFinite(maxY) || maxY <= minY) {
+      return WALL_HEIGHT_FALLBACK;
+    }
+
+    return normalizeWallBaseY(maxY - minY);
+  }
+
+  function getWallHeightForVariant(variantId) {
+    if (typeof isCustomWallVariant === 'function' && isCustomWallVariant(variantId)) {
+      const customHeight = typeof getCustomWallHeight === 'function' ? getCustomWallHeight(variantId) : WALL_HEIGHT_FALLBACK;
+      return Number.isFinite(customHeight) && customHeight > 0 ? normalizeWallBaseY(customHeight) : WALL_HEIGHT_FALLBACK;
+    }
+
+    if (variantHeightCache.has(variantId)) return variantHeightCache.get(variantId);
+
+    const style = getVariantStyle(variantId);
+    if (!style) {
+      variantHeightCache.set(variantId, WALL_HEIGHT_FALLBACK);
+      return WALL_HEIGHT_FALLBACK;
+    }
+
+    const material = getMaterialForVariant(variantId);
+    const measureScene = new THREE.Scene();
+    const builtMeshes = buildVariantMesh({
+      THREE,
+      scene: measureScene,
+      cells: [{ x: 0, z: 0 }],
+      style,
+      material,
+    });
+    const measuredHeight = getMeasuredHeightFromBuiltMeshes(builtMeshes, measureScene);
+    variantHeightCache.set(variantId, measuredHeight);
+    return measuredHeight;
+  }
+
+  function getWallHeightValue(wall) {
+    const storedHeight = Number(wall?.height);
+    if (Number.isFinite(storedHeight) && storedHeight > 0) return storedHeight;
+    return getWallHeightForVariant(wall?.variant || 'brick-dense');
+  }
+
+  function getCellWalls(cellX, cellZ) {
+    return userWalls
+      .filter((wall) => wall.x === cellX && wall.z === cellZ)
+      .sort((a, b) => normalizeWallBaseY(a.baseY || 0) - normalizeWallBaseY(b.baseY || 0));
+  }
+
+  function getCellTopY(cellX, cellZ) {
+    let topY = 0;
+    for (const wall of userWalls) {
+      if (wall.x !== cellX || wall.z !== cellZ) continue;
+      const wallTopY = normalizeWallBaseY((wall.baseY || 0) + getWallHeightValue(wall));
+      if (wallTopY > topY) topY = wallTopY;
+    }
+    return normalizeWallBaseY(topY);
+  }
+
+  function updateUserWallSetForCell(cellX, cellZ) {
+    const key = keyForCell(cellX, cellZ);
+    const hasAnyWall = userWalls.some((wall) => wall.x === cellX && wall.z === cellZ);
+    if (hasAnyWall) userWallSet.add(key);
+    else userWallSet.delete(key);
+  }
+
+  function findWallAtBaseY(cellX, cellZ, baseY) {
+    return userWalls.find((wall) => (
+      wall.x === cellX
+      && wall.z === cellZ
+      && areSameWallBase(wall.baseY || 0, baseY)
+    )) || null;
+  }
+
+  function assignMeshesToWalls(cells, variantId, baseY, mesh) {
     for (const cell of cells) {
-      const wall = userWalls.find((entry) => entry.x === cell.x && entry.z === cell.z);
+      const wall = userWalls.find((entry) => (
+        entry.x === cell.x
+        && entry.z === cell.z
+        && (entry.variant || 'brick-dense') === variantId
+        && areSameWallBase(entry.baseY || 0, baseY)
+      ));
       if (wall) wall.mesh = mesh;
     }
   }
@@ -844,32 +1003,40 @@ export function createWallsSystem({
     clearRenderedEntries();
     for (const wall of userWalls) wall.mesh = null;
 
-    const byVariant = new Map();
+    const byVariantAndLayer = new Map();
     for (const wall of userWalls) {
       const variant = wall.variant || 'brick-dense';
-      if (!byVariant.has(variant)) byVariant.set(variant, []);
-      byVariant.get(variant).push(wall);
+      const baseY = normalizeWallBaseY(wall.baseY || 0);
+      const groupKey = `${variant}@@${baseY.toFixed(3)}`;
+      if (!byVariantAndLayer.has(groupKey)) {
+        byVariantAndLayer.set(groupKey, { variantId: variant, baseY, walls: [] });
+      }
+      byVariantAndLayer.get(groupKey).walls.push(wall);
     }
 
-    for (const [variantId, cells] of byVariant) {
+    for (const { variantId, baseY, walls } of byVariantAndLayer.values()) {
       const style = getVariantStyle(variantId);
       if (!style) {
-        const isCustomVariant = typeof isCustomWallVariant === 'function' && isCustomWallVariant(variantId);
-        for (const cell of cells) {
-          const mesh = isCustomVariant && typeof createCustomWallMesh === 'function'
-            ? createCustomWallMesh(variantId, { x: cell.x, z: cell.z })
-            : createWallMesh(cell.x, cell.z, false);
+        const customVariant = typeof isCustomWallVariant === 'function' && isCustomWallVariant(variantId);
+        for (const wall of walls) {
+          const mesh = customVariant && typeof createCustomWallMesh === 'function'
+            ? createCustomWallMesh(variantId, { x: wall.x, y: baseY, z: wall.z })
+            : createWallMesh(wall.x, wall.z, false);
           if (!mesh) continue;
+          if (!customVariant) mesh.position.y = baseY + 0.2;
           scene.add(mesh);
           renderedEntries.push({ mesh, disposeGeometry: false, disposeMaterial: false });
-          cell.mesh = mesh;
+          wall.mesh = mesh;
         }
         continue;
       }
 
       const material = getMaterialForVariant(variantId);
-      const builtMeshes = buildVariantMesh({ THREE, scene, cells, style, material });
+      const layerCells = walls.map(({ x, z }) => ({ x, z }));
+      const builtMeshes = buildVariantMesh({ THREE, scene, cells: layerCells, style, material });
       for (const built of builtMeshes) {
+        normalizeBuiltMeshBaseY(built);
+        built.mesh.position.y += baseY;
         renderedEntries.push({
           mesh: built.mesh,
           disposeGeometry: built.disposeGeometry,
@@ -877,60 +1044,414 @@ export function createWallsSystem({
           extraMaterials: built.extraMaterials,
           extraGeometries: built.extraGeometries,
         });
-        assignMeshesToCells(built.cells, built.mesh);
+        assignMeshesToWalls(built.cells, variantId, baseY, built.mesh);
       }
     }
   }
 
   function clearLastActionCell() {
     lastWallActionCellKey = '';
+    actionRepeatTimer = 0;
+    actionRepeatStarted = false;
+    primaryActionPrimed = false;
+    primaryActionPerformed = false;
   }
 
-  function removeUserWallAt(cellX, cellZ) {
-    const key = keyForCell(cellX, cellZ);
+  function emitStackFx(cellX, cellZ, y, color, count = 2) {
+    if (typeof burstAt !== 'function') return;
+    burstAt(cellX, Math.max(0.2, y), cellZ, color, count);
+  }
+
+  function removeUserWallAt(cellX, cellZ, baseY) {
+    const normalizedBaseY = normalizeWallBaseY(baseY);
+    let removedWall = null;
+
     for (let i = userWalls.length - 1; i >= 0; i -= 1) {
       const wall = userWalls[i];
-      if (wall.x === cellX && wall.z === cellZ) {
-        userWalls.splice(i, 1);
-        break;
-      }
+      if (wall.x !== cellX || wall.z !== cellZ) continue;
+      if (!areSameWallBase(wall.baseY || 0, normalizedBaseY)) continue;
+      removedWall = userWalls.splice(i, 1)[0];
+      break;
     }
-    userWallSet.delete(key);
+
+    if (!removedWall) return false;
+
+    updateUserWallSetForCell(cellX, cellZ);
     rebuildVisuals();
-    burstAt(cellX, 0.9, cellZ, 0x9fe8ff, 3);
+    emitStackFx(cellX, cellZ, normalizedBaseY + (getWallHeightValue(removedWall) * 0.5), 0x9fe8ff, 3);
     refreshHud();
+    return true;
   }
 
-  function toggleWallAtPlayer() {
+  function addUserWallAt(cellX, cellZ, variantId, baseY, assetHeight) {
+    const normalizedBaseY = normalizeWallBaseY(baseY);
+    const height = Number.isFinite(assetHeight) && assetHeight > 0 ? normalizeWallBaseY(assetHeight) : getWallHeightForVariant(variantId);
+
+    userWalls.push({
+      x: cellX,
+      z: cellZ,
+      baseY: normalizedBaseY,
+      height,
+      variant: variantId,
+      mesh: null,
+    });
+    updateUserWallSetForCell(cellX, cellZ);
+    rebuildVisuals();
+    emitStackFx(cellX, cellZ, normalizedBaseY + (height * 0.5), 0x75f7ff, 4);
+    refreshHud();
+    return true;
+  }
+
+  function getPlacementTarget(cellX, cellZ, variantId) {
+    const assetHeight = getWallHeightForVariant(variantId);
+    const supportTopY = getCellTopY(cellX, cellZ);
+    const baseY = normalizeWallBaseY(Math.max(0, supportTopY));
+    return {
+      assetHeight,
+      supportTopY,
+      baseY,
+      previewCenterY: normalizeWallBaseY(baseY + (assetHeight * 0.5)),
+    };
+  }
+
+  function getTopWallAtCell(cellX, cellZ) {
+    const walls = getCellWalls(cellX, cellZ);
+    if (!walls.length) return null;
+    return walls[walls.length - 1] || null;
+  }
+
+  function getPlayerPlacementCell() {
     const player = getPlayer();
-    if (!player) return;
+    if (!player) return null;
 
-    const placeX = Math.round(player.x);
-    const placeZ = Math.round(player.z);
-    const key = keyForCell(placeX, placeZ);
+    const cellX = Math.round(player.x);
+    const cellZ = Math.round(player.z);
+    if (Math.abs(cellX) >= BORDER_HALF || Math.abs(cellZ) >= BORDER_HALF) return null;
+    if (isBorderCell(cellX, cellZ)) return null;
 
-    if (Math.abs(placeX) >= BORDER_HALF || Math.abs(placeZ) >= BORDER_HALF) return;
-    if (isBorderCell(placeX, placeZ)) return;
-    if (lastWallActionCellKey === key) return;
-    lastWallActionCellKey = key;
+    return { cellX, cellZ };
+  }
 
-    if (userWallSet.has(key)) {
-      removeUserWallAt(placeX, placeZ);
+  function syncDestroySelectionCell(cellX, cellZ) {
+    const nextKey = `${cellX}|${cellZ}`;
+    if (destroySelectionCellKey === nextKey) return;
+    destroySelectionCellKey = nextKey;
+    destroySelectionOffsetFromTop = 0;
+  }
+
+  function getBuildSelectionCandidates(cellX, cellZ, variantId) {
+    const { supportTopY } = getPlacementTarget(cellX, cellZ, variantId);
+    const walls = getCellWalls(cellX, cellZ);
+    const candidates = [];
+
+    function pushCandidate(value) {
+      const normalizedValue = normalizeWallBaseY(Math.max(0, value));
+      if (candidates.some((candidate) => areSameWallBase(candidate, normalizedValue))) return;
+      candidates.push(normalizedValue);
+    }
+
+    pushCandidate(supportTopY);
+    pushCandidate(0);
+
+    for (let i = walls.length - 1; i >= 0; i -= 1) {
+      const wall = walls[i];
+      const wallBaseY = normalizeWallBaseY(wall.baseY || 0);
+      const wallTopY = normalizeWallBaseY(wallBaseY + getWallHeightValue(wall));
+      pushCandidate(wallBaseY);
+      pushCandidate(wallTopY);
+    }
+
+    candidates.sort((a, b) => b - a);
+    return candidates;
+  }
+
+  function getSelectedBuildTargetAtCell(cellX, cellZ, variantId) {
+    const candidates = getBuildSelectionCandidates(cellX, cellZ, variantId);
+    const maxOffset = Math.max(0, candidates.length - 1);
+    buildSelectionOffsetFromTop = Math.max(0, Math.min(buildSelectionOffsetFromTop, maxOffset));
+    const selectedBaseY = candidates[buildSelectionOffsetFromTop] ?? 0;
+    const assetHeight = getWallHeightForVariant(variantId);
+
+    return {
+      assetHeight,
+      baseY: normalizeWallBaseY(selectedBaseY),
+      previewCenterY: normalizeWallBaseY(selectedBaseY + (assetHeight * 0.5)),
+      supportTopY: normalizeWallBaseY(Math.max(0, getCellTopY(cellX, cellZ))),
+    };
+  }
+
+  function getSelectedDestroyWallAtCell(cellX, cellZ) {
+    syncDestroySelectionCell(cellX, cellZ);
+    const walls = getCellWalls(cellX, cellZ);
+    if (!walls.length) return null;
+    const maxOffset = Math.max(0, walls.length - 1);
+    destroySelectionOffsetFromTop = Math.max(0, Math.min(destroySelectionOffsetFromTop, maxOffset));
+    const selectedIndex = Math.max(0, walls.length - 1 - destroySelectionOffsetFromTop);
+    return walls[selectedIndex] || null;
+  }
+
+  function syncBuildSelectionToBaseY(cellX, cellZ, variantId, targetBaseY) {
+    const candidates = getBuildSelectionCandidates(cellX, cellZ, variantId);
+    if (!candidates.length) {
+      buildSelectionOffsetFromTop = 0;
       return;
     }
 
-    userWalls.push({ x: placeX, z: placeZ, variant: getCurrentVariant(), mesh: null });
-    userWallSet.add(key);
-    rebuildVisuals();
-    burstAt(placeX, 0.9, placeZ, 0x75f7ff, 4);
+    const normalizedTarget = normalizeWallBaseY(Math.max(0, targetBaseY || 0));
+    let bestIndex = 0;
+    let bestDistance = Infinity;
+
+    for (let i = 0; i < candidates.length; i += 1) {
+      const distance = Math.abs(candidates[i] - normalizedTarget);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = i;
+      }
+    }
+
+    buildSelectionOffsetFromTop = bestIndex;
+  }
+
+  function syncDestroySelectionToBaseY(cellX, cellZ, targetBaseY) {
+    syncDestroySelectionCell(cellX, cellZ);
+    const walls = getCellWalls(cellX, cellZ);
+    if (!walls.length) {
+      destroySelectionOffsetFromTop = 0;
+      return;
+    }
+
+    const normalizedTarget = normalizeWallBaseY(Math.max(0, targetBaseY || 0));
+    let bestIndex = walls.length - 1;
+    let bestDistance = Infinity;
+
+    for (let i = 0; i < walls.length; i += 1) {
+      const wallBaseY = normalizeWallBaseY(walls[i].baseY || 0);
+      const distance = Math.abs(wallBaseY - normalizedTarget);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = i;
+      }
+    }
+
+    destroySelectionOffsetFromTop = Math.max(0, walls.length - 1 - bestIndex);
+  }
+
+  function nudgeDestroySelection(direction) {
+    if (!destroyMode) return false;
+    const placementCell = getPlayerPlacementCell();
+    if (!placementCell) return false;
+    const { cellX, cellZ } = placementCell;
+    syncDestroySelectionCell(cellX, cellZ);
+    const walls = getCellWalls(cellX, cellZ);
+    if (!walls.length) return false;
+
+    const maxOffset = Math.max(0, walls.length - 1);
+    if (direction > 0) {
+      destroySelectionOffsetFromTop = Math.max(0, destroySelectionOffsetFromTop - 1);
+    } else if (direction < 0) {
+      destroySelectionOffsetFromTop = Math.min(maxOffset, destroySelectionOffsetFromTop + 1);
+    }
+
     refreshHud();
+    return true;
+  }
+
+  function nudgeBuildSelection(direction) {
+    if (destroyMode) return false;
+    const placementCell = getPlayerPlacementCell();
+    if (!placementCell) return false;
+    const { cellX, cellZ } = placementCell;
+    const variantId = getCurrentVariant();
+    const candidates = getBuildSelectionCandidates(cellX, cellZ, variantId);
+    if (!candidates.length) return false;
+
+    const maxOffset = Math.max(0, candidates.length - 1);
+    if (direction > 0) {
+      buildSelectionOffsetFromTop = Math.max(0, buildSelectionOffsetFromTop - 1);
+    } else if (direction < 0) {
+      buildSelectionOffsetFromTop = Math.min(maxOffset, buildSelectionOffsetFromTop + 1);
+    }
+
+    refreshHud();
+    return true;
+  }
+
+  function beginPrimaryActionHold() {
+    primaryActionPrimed = true;
+    primaryActionPerformed = false;
+    actionRepeatTimer = 0;
+    actionRepeatStarted = false;
+    lastWallActionCellKey = '';
+    primaryActionPerformed = performPrimaryWallActionAtPlayer() || primaryActionPerformed;
+  }
+
+  function endPrimaryActionHold({ allowTap = true } = {}) {
+    let performed = false;
+    if (primaryActionPrimed && !primaryActionPerformed && allowTap) {
+      performed = performPrimaryWallActionAtPlayer();
+    }
+    clearLastActionCell();
+    return performed;
+  }
+
+  function performPrimaryWallActionAtPlayer() {
+    const placementCell = getPlayerPlacementCell();
+    if (!placementCell) return false;
+
+    const { cellX: placeX, cellZ: placeZ } = placementCell;
+
+    if (destroyMode) {
+      const selectedWall = getSelectedDestroyWallAtCell(placeX, placeZ);
+      if (!selectedWall) return false;
+      const destroyBaseY = normalizeWallBaseY(selectedWall.baseY || 0);
+      const destroyActionKey = `destroy@@${makeWallActionKey(placeX, placeZ, destroyBaseY)}`;
+      if (lastWallActionCellKey === destroyActionKey) return false;
+      const removed = removeUserWallAt(placeX, placeZ, destroyBaseY);
+      if (removed) lastWallActionCellKey = destroyActionKey;
+      return removed;
+    }
+
+    const variantId = getCurrentVariant();
+    const { baseY, assetHeight } = getSelectedBuildTargetAtCell(placeX, placeZ, variantId);
+    const buildActionKey = `build@@${makeWallActionKey(placeX, placeZ, baseY)}`;
+    if (lastWallActionCellKey === buildActionKey) return false;
+
+    const existingWall = findWallAtBaseY(placeX, placeZ, baseY);
+    let changed = false;
+
+    if (existingWall) {
+      const removed = removeUserWallAt(placeX, placeZ, baseY);
+      if (!removed) return false;
+      changed = true;
+    }
+
+    const added = addUserWallAt(placeX, placeZ, variantId, baseY, assetHeight);
+    if (added || changed) lastWallActionCellKey = buildActionKey;
+    return added || changed;
+  }
+
+  function updatePrimaryActionHold(delta, { primaryHeld = false, bypassInitialDelay = false } = {}) {
+    if (!primaryActionPrimed || !primaryHeld) return;
+
+    actionRepeatTimer += delta;
+
+    if (!actionRepeatStarted) {
+      const initialDelay = bypassInitialDelay ? WALL_ACTION_REPEAT_DELAY : WALL_ACTION_REPEAT_INITIAL_DELAY;
+      if (actionRepeatTimer < initialDelay) return;
+      actionRepeatTimer -= initialDelay;
+      actionRepeatStarted = true;
+      primaryActionPerformed = performPrimaryWallActionAtPlayer() || primaryActionPerformed;
+      return;
+    }
+
+    while (actionRepeatTimer >= WALL_ACTION_REPEAT_DELAY) {
+      actionRepeatTimer -= WALL_ACTION_REPEAT_DELAY;
+      primaryActionPerformed = performPrimaryWallActionAtPlayer() || primaryActionPerformed;
+    }
+  }
+
+  function toggleDestroyMode() {
+    const placementCell = getPlayerPlacementCell();
+    const currentVariant = getCurrentVariant();
+    let preservedBaseY = null;
+
+    if (placementCell) {
+      if (destroyMode) {
+        const selectedWall = getSelectedDestroyWallAtCell(placementCell.cellX, placementCell.cellZ);
+        preservedBaseY = selectedWall ? normalizeWallBaseY(selectedWall.baseY || 0) : null;
+      } else {
+        preservedBaseY = getSelectedBuildTargetAtCell(
+          placementCell.cellX,
+          placementCell.cellZ,
+          currentVariant,
+        ).baseY;
+      }
+    }
+
+    destroyMode = !destroyMode;
+
+    if (placementCell && Number.isFinite(preservedBaseY)) {
+      if (destroyMode) {
+        syncDestroySelectionToBaseY(placementCell.cellX, placementCell.cellZ, preservedBaseY);
+      } else {
+        syncBuildSelectionToBaseY(placementCell.cellX, placementCell.cellZ, currentVariant, preservedBaseY);
+      }
+    } else if (destroyMode) {
+      destroySelectionOffsetFromTop = 0;
+      destroySelectionCellKey = '';
+    }
+
+    clearLastActionCell();
+    refreshHud();
+    return destroyMode;
+  }
+
+  function isDestroyModeActive() {
+    return destroyMode;
+  }
+
+  function getStackState() {
+    const currentVariant = getCurrentVariant();
+    const stepHeight = getWallHeightForVariant(currentVariant);
+    const placementCell = getPlayerPlacementCell();
+    const placementTarget = placementCell ? getSelectedBuildTargetAtCell(placementCell.cellX, placementCell.cellZ, currentVariant) : null;
+    let previewBaseY = placementTarget ? placementTarget.baseY : 0;
+    let previewCenterY = placementTarget ? placementTarget.previewCenterY : (stepHeight * 0.5);
+    let previewTopY = normalizeWallBaseY(previewBaseY + stepHeight);
+    let displayLevel = stepHeight > WALL_BASE_EPSILON
+      ? Math.max(0, Math.round(previewBaseY / stepHeight))
+      : 0;
+    let previewCellX = placementCell ? placementCell.cellX : 0;
+    let previewCellZ = placementCell ? placementCell.cellZ : 0;
+
+    if (destroyMode && placementCell) {
+      const selectedWall = getSelectedDestroyWallAtCell(placementCell.cellX, placementCell.cellZ);
+      if (selectedWall) {
+        const selectedBaseY = normalizeWallBaseY(selectedWall.baseY || 0);
+        const selectedHeight = getWallHeightValue(selectedWall);
+        previewBaseY = selectedBaseY;
+        previewCenterY = normalizeWallBaseY(selectedBaseY + (selectedHeight * 0.5));
+        previewTopY = normalizeWallBaseY(selectedBaseY + selectedHeight);
+        displayLevel = selectedHeight > WALL_BASE_EPSILON
+          ? Math.max(0, Math.round(selectedBaseY / selectedHeight))
+          : displayLevel;
+      }
+    }
+
+    return {
+      level: displayLevel,
+      displayLevel,
+      stepHeight,
+      destroyMode,
+      previewBaseY,
+      previewCenterY,
+      previewTopY,
+      previewCellX,
+      previewCellZ,
+      supportTopY: placementTarget ? placementTarget.supportTopY : 0,
+      buildSelectionOffsetFromTop,
+    };
   }
 
   function dispose() {
     clearRenderedEntries();
     materialCache.forEach((material) => material.dispose());
     materialCache.clear();
+    variantHeightCache.clear();
   }
 
-  return { toggleWallAtPlayer, clearLastActionCell, rebuildVisuals, dispose };
+  return {
+    performPrimaryWallActionAtPlayer,
+    beginPrimaryActionHold,
+    endPrimaryActionHold,
+    updatePrimaryActionHold,
+    clearLastActionCell,
+    toggleDestroyMode,
+    isDestroyModeActive,
+    nudgeDestroySelection,
+    nudgeBuildSelection,
+    getStackState,
+    rebuildVisuals,
+    dispose,
+  };
 }

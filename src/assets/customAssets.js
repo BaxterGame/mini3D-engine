@@ -68,6 +68,12 @@ function createNormalizedTemplate(THREE, geometry, material) {
 
   const root = new THREE.Group();
   root.add(mesh);
+  root.userData.wallMetrics = {
+    height: size.y * scale,
+    spanX: size.x * scale,
+    spanZ: size.z * scale,
+    minY: 0,
+  };
   return root;
 }
 
@@ -257,7 +263,20 @@ export function createCustomAssetRegistry({ THREE, storageKey = STORAGE_KEY } = 
     return selectedItemId || null;
   }
 
-  function createWallInstance(variantId, { x = 0, z = 0 } = {}) {
+  function getWallHeight(variantId) {
+    if (!isCustomVariant(variantId)) return 1;
+
+    const assetId = variantId.slice(CUSTOM_VARIANT_PREFIX.length);
+    const recordIndex = records.findIndex((record) => record.id === assetId);
+    if (recordIndex < 0) return 1;
+
+    const record = records[recordIndex];
+    const template = buildTemplate(record, recordIndex);
+    const height = template?.userData?.wallMetrics?.height;
+    return Number.isFinite(height) && height > 0 ? height : 1;
+  }
+
+  function createWallInstance(variantId, { x = 0, y = 0, z = 0 } = {}) {
     if (!isCustomVariant(variantId)) return null;
 
     const assetId = variantId.slice(CUSTOM_VARIANT_PREFIX.length);
@@ -267,7 +286,7 @@ export function createCustomAssetRegistry({ THREE, storageKey = STORAGE_KEY } = 
     const record = records[recordIndex];
     const template = buildTemplate(record, recordIndex);
     const instance = cloneTemplate(template);
-    instance.position.set(x, 0, z);
+    instance.position.set(x, y, z);
     return instance;
   }
 
@@ -282,6 +301,7 @@ export function createCustomAssetRegistry({ THREE, storageKey = STORAGE_KEY } = 
     isCustomVariant,
     getDefaultWallSelection,
     resolveWallSelection,
+    getWallHeight,
     createWallInstance,
   };
 }
