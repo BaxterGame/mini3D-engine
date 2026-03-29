@@ -2,13 +2,13 @@
 // Mapping recentré sur la tâche #38 :
 // - WASD = déplacement
 // - Q = cycle des modes joueur
-// - E = inventaire (placeholder UI)
-// - flèches = caméra (zoom / rotation)
+// - R = inventaire (placeholder UI)
+// - flèches = caméra (zoom / rotation), sauf en destruction mur pour la sélection verticale
 // - clic gauche souris = action principale (build / fire)
 const HANDLED_KEYS = new Set([
   'arrowup', 'arrowdown', 'arrowleft', 'arrowright',
   'space', 'enter', 'w', 'a', 's', 'd', 'q', 'e',
-  'shift', 'r', 'v', 'c', 'm', 'j', 'l', 'x',
+  'shift', 'r', 'v', 'c', 'm', 'j', 'l', 'x', 'f', 'g', 'z',
 ]);
 
 function normalizeKey(event) {

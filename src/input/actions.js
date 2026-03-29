@@ -2,7 +2,7 @@
 // Mapping gameplay #38 :
 // - WASD = déplacement
 // - Q = cycle des modes joueur
-// - E = inventaire
+// - R = inventaire
 // - flèches = caméra (zoom / rotation)
 // - clic gauche souris = action principale (build / fire)
 // Les raccourcis historiques C / J / L / X restent tolérés en alias léger.
@@ -35,11 +35,14 @@ export function createActionController(input) {
     isPrimaryActionHeld() {
       return input.isDown('space') || input.isDown('mouseleft');
     },
+    consumePrimaryActionPress() {
+      return input.consumePress('space') || input.consumePress('mouseleft');
+    },
     consumePrimaryActionRelease() {
       return input.consumeRelease('space') || input.consumeRelease('mouseleft');
     },
     consumeRestart() {
-      return input.consumePress('r');
+      return input.consumePress('z');
     },
     consumeCycleCamera() {
       return input.consumePress('c');
@@ -75,6 +78,10 @@ export function createActionController(input) {
       return input.consumePress('enter');
     },
     consumeInventoryToggle() {
+      return input.consumePress('r');
+    },
+
+    consumeToggleWallDestroyMode() {
       return input.consumePress('e');
     },
     consumeNextPlayerMode() {

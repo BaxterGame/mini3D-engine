@@ -394,6 +394,24 @@ const THREE = window.THREE;
   }
 
   function refreshHud() {
+    const stackState = wallsSystem && typeof wallsSystem.getStackState === 'function'
+      ? wallsSystem.getStackState()
+      : { level: -1, displayLevel: 0, stepHeight: 0, destroyMode: false };
+
+    if (playerSystem && typeof playerSystem.setBuildIndicator === 'function') {
+      playerSystem.setBuildIndicator({
+        active: !inventoryOpen && !!modeSystem && typeof modeSystem.getCurrentMode === 'function' && modeSystem.getCurrentMode() === 'wall',
+        level: stackState.level,
+        destroyMode: !!stackState.destroyMode,
+        previewBaseY: stackState.previewBaseY,
+        previewCenterY: stackState.previewCenterY,
+        previewTopY: stackState.previewTopY,
+        previewCellX: stackState.previewCellX,
+        previewCellZ: stackState.previewCellZ,
+        stepHeight: stackState.stepHeight,
+      });
+    }
+
     hud.refresh({
       score,
       enemiesCount: enemies.length,
@@ -406,6 +424,12 @@ const THREE = window.THREE;
       playerModeLabel: modeSystem ? modeSystem.getCurrentModeLabel() : 'WALL',
       inventoryOpen,
       inventorySelectionLabel: inventoryMenu.getSelectionSummary(),
+      wallStackLevel: stackState.level,
+      wallStackDisplayLevel: stackState.displayLevel,
+      wallStackStep: stackState.stepHeight,
+      wallDestroyMode: !!stackState.destroyMode,
+      wallPreviewBaseY: stackState.previewBaseY,
+      wallPreviewCenterY: stackState.previewCenterY,
     });
   }
 
@@ -501,12 +525,45 @@ const THREE = window.THREE;
       toggleWorldMode();
     }
 
-    if (actions.consumeZoomIn() && cameraController) {
-      cameraController.zoomBy(1);
+    if (
+      actions.consumeToggleWallDestroyMode()
+      && !inventoryOpen
+      && modeSystem
+      && typeof modeSystem.getCurrentMode === 'function'
+      && modeSystem.getCurrentMode() === 'wall'
+      && wallsSystem
+      && typeof wallsSystem.toggleDestroyMode === 'function'
+    ) {
+      wallsSystem.toggleDestroyMode();
     }
 
-    if (actions.consumeZoomOut() && cameraController) {
-      cameraController.zoomBy(-1);
+    const wallDestroyModeActive = wallsSystem && typeof wallsSystem.isDestroyModeActive === 'function'
+      ? wallsSystem.isDestroyModeActive()
+      : false;
+
+    const wallModeActive = !inventoryOpen
+      && modeSystem
+      && typeof modeSystem.getCurrentMode === 'function'
+      && modeSystem.getCurrentMode() === 'wall';
+
+    if (actions.consumeZoomIn()) {
+      if (wallModeActive && wallDestroyModeActive && wallsSystem && typeof wallsSystem.nudgeDestroySelection === 'function') {
+        wallsSystem.nudgeDestroySelection(1);
+      } else if (wallModeActive && wallsSystem && typeof wallsSystem.nudgeBuildSelection === 'function') {
+        wallsSystem.nudgeBuildSelection(1);
+      } else if (cameraController) {
+        cameraController.zoomBy(1);
+      }
+    }
+
+    if (actions.consumeZoomOut()) {
+      if (wallModeActive && wallDestroyModeActive && wallsSystem && typeof wallsSystem.nudgeDestroySelection === 'function') {
+        wallsSystem.nudgeDestroySelection(-1);
+      } else if (wallModeActive && wallsSystem && typeof wallsSystem.nudgeBuildSelection === 'function') {
+        wallsSystem.nudgeBuildSelection(-1);
+      } else if (cameraController) {
+        cameraController.zoomBy(-1);
+      }
     }
 
     if (actions.consumeRotateLeft() && cameraController) {
@@ -529,8 +586,48 @@ const THREE = window.THREE;
     }
   }
 
-  function handleContextualActions() {
+  function handleContextualActions(delta) {
     if (!modeSystem || inventoryOpen) return;
+
+    const currentMode = typeof modeSystem.getCurrentMode === 'function' ? modeSystem.getCurrentMode() : null;
+
+    if (currentMode === 'wall' && wallsSystem) {
+      const primaryPressed = actions.consumePrimaryActionPress();
+      const primaryHeld = actions.isPrimaryActionHeld();
+      const primaryReleased = actions.consumePrimaryActionRelease();
+
+      if (primaryPressed && typeof wallsSystem.beginPrimaryActionHold === 'function') {
+        wallsSystem.beginPrimaryActionHold();
+      }
+
+      if (typeof wallsSystem.updatePrimaryActionHold === 'function') {
+        const movementIntent = typeof actions.getMovementIntent === 'function'
+          ? actions.getMovementIntent()
+          : { x: 0, z: 0 };
+        const directionalHeld = (
+          !!movementIntent?.x
+          || !!movementIntent?.z
+          || input.isDown('arrowleft')
+          || input.isDown('arrowright')
+          || input.isDown('arrowup')
+          || input.isDown('arrowdown')
+        );
+        wallsSystem.updatePrimaryActionHold(delta, {
+          primaryHeld,
+          bypassInitialDelay: directionalHeld,
+        });
+      }
+
+      if (primaryReleased) {
+        if (typeof wallsSystem.endPrimaryActionHold === 'function') {
+          wallsSystem.endPrimaryActionHold({ allowTap: true });
+        } else if (typeof wallsSystem.clearLastActionCell === 'function') {
+          wallsSystem.clearLastActionCell();
+        }
+        modeSystem.handlePrimaryActionReleased();
+      }
+      return;
+    }
 
     if (actions.isPrimaryActionHeld()) {
       modeSystem.handlePrimaryActionHeld();
@@ -549,7 +646,8 @@ const THREE = window.THREE;
       timeElapsed += delta;
       actionCooldown = Math.max(0, actionCooldown - delta);
 
-      handleContextualActions();
+
+      handleContextualActions(delta);
 
       if (playerSystem) playerSystem.update(delta);
       if (modeSystem) modeSystem.update(delta);
@@ -664,6 +762,7 @@ const THREE = window.THREE;
       resolveSelectedWallVariant: (variantId) => customAssetRegistry.resolveWallSelection(variantId),
       isCustomWallVariant: (variantId) => customAssetRegistry.isCustomVariant(variantId),
       createCustomWallMesh: (variantId, cell) => customAssetRegistry.createWallInstance(variantId, cell),
+      getCustomWallHeight: (variantId) => customAssetRegistry.getWallHeight(variantId),
       createWallMesh,
     });
 
@@ -701,7 +800,7 @@ const THREE = window.THREE;
     toggleProjectionBtn.style.display = 'none';
     if (hintText) {
       hintText.textContent =
-        'WASD = déplacement • E = inventaire • inventaire : flèches / WASD = navigation • gameplay : ↑ / ↓ = zoom, ← / → = rotation 45° • Q = cycle murs / projectile / aqua / véhicule • molette = zoom • Espace = action contextuelle • M = mission / exploration • C = cycle caméra • R = relancer';
+        'WASD = déplacement • R = inventaire • inventaire : flèches / WASD = navigation • gameplay : ↑ / ↓ = zoom, ← / → = rotation 45° • Espace / clic = 1 action • hold = répétition après 1 s • E = mode destruction • en destruction : ↑ / ↓ = cible verticale • Q = cycle murs / projectile / aqua / véhicule • molette = zoom • M = mission / exploration • C = cycle caméra • Z = reset';
     }
 
     toggleSandboxBtn.addEventListener('click', () => {

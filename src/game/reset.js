@@ -66,7 +66,12 @@ export function createResetSystem(opts) {
     runtime.spawnCooldown = 0.4;
 
     const wallsSystem = getWallsSystem ? getWallsSystem() : null;
-    if (wallsSystem) wallsSystem.clearLastActionCell();
+    if (wallsSystem) {
+      if (typeof wallsSystem.isDestroyModeActive === 'function' && wallsSystem.isDestroyModeActive()) {
+        if (typeof wallsSystem.toggleDestroyMode === 'function') wallsSystem.toggleDestroyMode();
+      }
+      if (typeof wallsSystem.clearLastActionCell === 'function') wallsSystem.clearLastActionCell();
+    }
 
     const playerSystem = getPlayerSystem ? getPlayerSystem() : null;
     const player = getPlayer ? getPlayer() : null;

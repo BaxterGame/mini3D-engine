@@ -5,6 +5,15 @@ import { clamp, normalize2D } from '../utils/math.js';
 import { INNER_LIMIT as DEFAULT_INNER_LIMIT } from '../config.js';
 import { getPlayerModeDef } from './playerModes.js';
 
+const WALL_GRID_SNAP_EPSILON = 0.001;
+const WALL_GRID_SNAP_LERP_SPEED = 12;
+
+function smoothToward(current, target, delta, speed) {
+  if (!Number.isFinite(current) || !Number.isFinite(target)) return target;
+  const factor = 1 - Math.exp(-Math.max(0, speed) * Math.max(0, delta));
+  return current + ((target - current) * factor);
+}
+
 function disposeObject3D(object) {
   if (!object) return;
 
@@ -58,6 +67,17 @@ export function createPlayerSystem({
   let group = null;
   let core = null;
   let halo = null;
+  const buildIndicator = {
+    active: false,
+    level: 0,
+    destroyMode: false,
+    previewBaseY: 0,
+    previewCenterY: 0.5,
+    previewTopY: 1.0,
+    previewCellX: 0,
+    previewCellZ: 0,
+    stepHeight: 1,
+  };
 
   function getLegacyMovementIntent() {
     const left = !!(keys && (keys.arrowleft || keys.q || keys.a));
@@ -85,6 +105,55 @@ export function createPlayerSystem({
     return def.createCore(THREE);
   }
 
+  function getIndicatorLocalY() {
+    if (!group) return 0;
+    const previewTopY = Number.isFinite(buildIndicator.previewTopY)
+      ? buildIndicator.previewTopY
+      : ((Number.isFinite(buildIndicator.previewCenterY) ? buildIndicator.previewCenterY : 0.5)
+        + ((Number.isFinite(buildIndicator.stepHeight) ? buildIndicator.stepHeight : 1) * 0.5));
+    return previewTopY - group.position.y;
+  }
+
+  function getIndicatorLocalXZ() {
+    if (!group) return { x: 0, z: 0 };
+    return { x: 0, z: 0 };
+  }
+
+  function applyHaloBaseState() {
+    if (!halo) return;
+    const material = halo.material;
+    if (!material || !material.color) return;
+
+    const baseX = Number.isFinite(halo.userData.baseX) ? halo.userData.baseX : halo.position.x;
+    const baseY = Number.isFinite(halo.userData.baseY) ? halo.userData.baseY : halo.position.y;
+    const baseZ = Number.isFinite(halo.userData.baseZ) ? halo.userData.baseZ : halo.position.z;
+    const baseOpacity = Number.isFinite(halo.userData.baseOpacity) ? halo.userData.baseOpacity : 0.5;
+    const baseColor = Number.isFinite(halo.userData.baseColor) ? halo.userData.baseColor : material.color.getHex();
+
+    const showBuildIndicator = !!buildIndicator.active && player?.mode === 'wall';
+    const targetColor = showBuildIndicator
+      ? (buildIndicator.destroyMode ? 0xff5f5f : 0x8df8ff)
+      : baseColor;
+
+    material.color.setHex(targetColor);
+    if (showBuildIndicator) {
+      const localPos = getIndicatorLocalXZ();
+      halo.position.x = localPos.x;
+      halo.position.y = getIndicatorLocalY();
+      halo.position.z = localPos.z;
+    } else {
+      halo.position.x = baseX;
+      halo.position.y = baseY;
+      halo.position.z = baseZ;
+    }
+    halo.userData.runtimeOpacityBase = showBuildIndicator
+      ? (buildIndicator.destroyMode ? 0.72 : 0.62)
+      : baseOpacity;
+    halo.userData.runtimeScaleBase = showBuildIndicator
+      ? (buildIndicator.destroyMode ? 1.08 : 1.03)
+      : 1;
+  }
+
   function rebuildVisualForMode(mode) {
     const def = getPlayerModeDef(mode);
     if (!group) return;
@@ -105,7 +174,17 @@ export function createPlayerSystem({
     halo = def.createHalo(THREE);
 
     if (core) group.add(core);
-    if (halo) group.add(halo);
+    if (halo) {
+      halo.userData.baseX = halo.position.x;
+      halo.userData.baseY = halo.position.y;
+      halo.userData.baseZ = halo.position.z;
+      halo.userData.baseOpacity = halo.material?.opacity ?? 0.5;
+      halo.userData.baseColor = halo.material?.color?.getHex?.() ?? 0xffffff;
+      halo.userData.runtimeOpacityBase = halo.userData.baseOpacity;
+      halo.userData.runtimeScaleBase = 1;
+      group.add(halo);
+      applyHaloBaseState();
+    }
   }
 
   function setMode(mode) {
@@ -189,6 +268,23 @@ export function createPlayerSystem({
       player.z = nextZ;
     }
 
+    const isWallMode = player.mode === 'wall';
+    const hasMovementInput = moveX !== 0 || moveZ !== 0;
+    if (isWallMode && !hasMovementInput) {
+      const snapTargetX = clamp(Math.round(player.x), -INNER_LIMIT, INNER_LIMIT);
+      const snapTargetZ = clamp(Math.round(player.z), -INNER_LIMIT, INNER_LIMIT);
+
+      const snappedX = smoothToward(player.x, snapTargetX, delta, WALL_GRID_SNAP_LERP_SPEED);
+      if (!collidesAtPlayer(snappedX, player.z, player.radius)) {
+        player.x = Math.abs(snappedX - snapTargetX) <= WALL_GRID_SNAP_EPSILON ? snapTargetX : snappedX;
+      }
+
+      const snappedZ = smoothToward(player.z, snapTargetZ, delta, WALL_GRID_SNAP_LERP_SPEED);
+      if (!collidesAtPlayer(player.x, snappedZ, player.radius)) {
+        player.z = Math.abs(snappedZ - snapTargetZ) <= WALL_GRID_SNAP_EPSILON ? snapTargetZ : snappedZ;
+      }
+    }
+
     const t = getTimeElapsed ? getTimeElapsed() : 0;
     if (group) {
       group.position.x = player.x;
@@ -203,8 +299,11 @@ export function createPlayerSystem({
     }
 
     if (halo?.material) {
-      halo.material.opacity = 0.38 + Math.sin(t * 4.2) * 0.05;
-      halo.scale.setScalar(1 + Math.sin(t * 5.2) * 0.03);
+      applyHaloBaseState();
+      const opacityBase = Number.isFinite(halo.userData.runtimeOpacityBase) ? halo.userData.runtimeOpacityBase : 0.38;
+      const scaleBase = Number.isFinite(halo.userData.runtimeScaleBase) ? halo.userData.runtimeScaleBase : 1;
+      halo.material.opacity = opacityBase + Math.sin(t * 4.2) * 0.05;
+      halo.scale.setScalar(scaleBase + Math.sin(t * 5.2) * 0.03);
     }
   }
 
@@ -216,6 +315,19 @@ export function createPlayerSystem({
     return player ? player.mode : 'wall';
   }
 
+  function setBuildIndicator(state = {}) {
+    buildIndicator.active = !!state.active;
+    buildIndicator.level = Number.isFinite(state.level) ? state.level : 0;
+    buildIndicator.destroyMode = !!state.destroyMode;
+    buildIndicator.previewBaseY = Number.isFinite(state.previewBaseY) ? state.previewBaseY : 0;
+    buildIndicator.previewCenterY = Number.isFinite(state.previewCenterY) ? state.previewCenterY : (buildIndicator.previewBaseY + 0.5);
+    buildIndicator.previewTopY = Number.isFinite(state.previewTopY) ? state.previewTopY : (buildIndicator.previewCenterY + ((Number.isFinite(state.stepHeight) ? state.stepHeight : 1) * 0.5));
+    buildIndicator.previewCellX = Number.isFinite(state.previewCellX) ? state.previewCellX : 0;
+    buildIndicator.previewCellZ = Number.isFinite(state.previewCellZ) ? state.previewCellZ : 0;
+    buildIndicator.stepHeight = Number.isFinite(state.stepHeight) ? state.stepHeight : 1;
+    applyHaloBaseState();
+  }
+
   return {
     create,
     update,
@@ -223,5 +335,6 @@ export function createPlayerSystem({
     getPlayer,
     getMode,
     setMode,
+    setBuildIndicator,
   };
 }
