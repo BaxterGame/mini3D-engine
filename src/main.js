@@ -79,6 +79,7 @@ const THREE = window.THREE;
   const customAssetFileBtn = document.getElementById('customAssetFileBtn');
   const customAssetFileInput = document.getElementById('customAssetFileInput');
   const customAssetDropzone = document.getElementById('customAssetDropzone');
+  const customAssetHexToggle = document.getElementById('customAssetHexToggle');
   const customAssetList = document.getElementById('customAssetList');
   const customAssetStatus = document.getElementById('customAssetStatus');
   const toggleViewBtn = document.getElementById('toggleViewBtn');
@@ -187,12 +188,13 @@ const THREE = window.THREE;
       fileBtn: customAssetFileBtn,
       fileInput: customAssetFileInput,
       dropzone: customAssetDropzone,
+      hexToggle: customAssetHexToggle,
       assetList: customAssetList,
       status: customAssetStatus,
     },
     {
-      async onFilesSelected(files) {
-        const result = await customAssetRegistry.importFiles(files);
+      async onFilesSelected(files, importOptions) {
+        const result = await customAssetRegistry.importFiles(files, importOptions);
         syncCustomWallInventory();
 
         const imported = result?.imported || [];
@@ -693,6 +695,10 @@ const THREE = window.THREE;
       collidesAtPlayer,
       getTimeElapsed: () => timeElapsed,
       getCameraController: () => cameraController,
+      getWallGridSnapTarget: (worldPosition) => customAssetRegistry.getSnapWorldForVariant(
+        customAssetRegistry.resolveWallSelection(selectedInventoryItems.wall),
+        worldPosition,
+      ),
       assetLibrary,
       INNER_LIMIT,
     });
@@ -763,6 +769,7 @@ const THREE = window.THREE;
       isCustomWallVariant: (variantId) => customAssetRegistry.isCustomVariant(variantId),
       createCustomWallMesh: (variantId, cell) => customAssetRegistry.createWallInstance(variantId, cell),
       getCustomWallHeight: (variantId) => customAssetRegistry.getWallHeight(variantId),
+      getPlacementCellForVariant: (variantId, worldPosition) => customAssetRegistry.getPlacementCellForVariant(variantId, worldPosition),
       createWallMesh,
     });
 

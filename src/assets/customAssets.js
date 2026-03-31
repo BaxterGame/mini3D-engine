@@ -4,6 +4,16 @@ const STORAGE_KEY = 'mini3d-engine.custom-asset.wall.obj.v1';
 const CUSTOM_IMPORT_ITEM_ID = 'wall-custom-import';
 const CUSTOM_RANDOM_ITEM_ID = 'wall-custom-random';
 const CUSTOM_VARIANT_PREFIX = 'wall-custom-asset:';
+const GRID_MODE_DEFAULT = 'square';
+const GRID_MODE_HEX = 'hex';
+const HEX_ROW_OFFSET = 0.5;
+const HEX_IMPORT_SCALE_X = 1;
+const HEX_IMPORT_SCALE_Y = 1.0;
+const HEX_IMPORT_SCALE_Z = 1.25;
+
+function roundToHalfStep(value) {
+  return Math.round((Number(value) || 0) * 2) / 2;
+}
 const DEFAULT_SWATCHES = [
   'linear-gradient(180deg, #7ef7ff 0%, #3187ff 100%)',
   'linear-gradient(180deg, #f6c46f 0%, #d96c2f 100%)',
@@ -22,6 +32,66 @@ function createUid() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function normalizeGridMode(value) {
+  return value === GRID_MODE_HEX ? GRID_MODE_HEX : GRID_MODE_DEFAULT;
+}
+
+function isOddRow(z) {
+  return Math.abs(Math.trunc(Number(z) || 0)) % 2 === 1;
+}
+
+function getGridPlacementForMode(gridMode, cell = {}) {
+  const x = Number(cell?.x) || 0;
+  const y = Number(cell?.y) || 0;
+  const z = Number(cell?.z) || 0;
+
+  if (normalizeGridMode(gridMode) !== GRID_MODE_HEX) {
+    return { x, y, z };
+  }
+
+  return {
+    x: x + (isOddRow(z) ? HEX_ROW_OFFSET : 0),
+    y,
+    z,
+  };
+}
+
+function getGridPlacementForRecord(record, cell = {}) {
+  return getGridPlacementForMode(record?.gridMode, cell);
+}
+
+function getPlacementCellForMode(gridMode, world = {}) {
+  const worldX = Number(world?.x) || 0;
+  const worldY = Number(world?.y) || 0;
+  const worldZ = Number(world?.z) || 0;
+
+  if (normalizeGridMode(gridMode) !== GRID_MODE_HEX) {
+    return {
+      x: Math.round(worldX),
+      y: worldY,
+      z: Math.round(worldZ),
+    };
+  }
+
+  const rowZ = Math.round(worldZ);
+  const localX = worldX - (isOddRow(rowZ) ? HEX_ROW_OFFSET : 0);
+  return {
+    x: Math.round(localX),
+    y: worldY,
+    z: rowZ,
+  };
+}
+
+function getSnapWorldForMode(gridMode, world = {}) {
+  const snappedCell = getPlacementCellForMode(gridMode, world);
+  const snappedWorld = getGridPlacementForMode(gridMode, snappedCell);
+  return {
+    x: normalizeGridMode(gridMode) === GRID_MODE_HEX ? roundToHalfStep(snappedWorld.x) : snappedWorld.x,
+    y: Number(world?.y) || 0,
+    z: snappedWorld.z,
+  };
+}
+
 function createMaterialForIndex(THREE, index) {
   const palette = [0x6be7ff, 0xf7a453, 0xb07bff, 0x7effa9, 0xffe37a, 0xff88b0];
   const color = palette[index % palette.length];
@@ -36,7 +106,7 @@ function createMaterialForIndex(THREE, index) {
   });
 }
 
-function createNormalizedTemplate(THREE, geometry, material) {
+function createNormalizedTemplate(THREE, geometry, material, options = {}) {
   geometry.computeBoundingBox();
   geometry.computeBoundingSphere();
 
@@ -55,23 +125,36 @@ function createNormalizedTemplate(THREE, geometry, material) {
     throw new Error('Dimensions invalides pour l’asset custom.');
   }
 
-  const scale = 1 / horizontalSpan;
+  const scaleXMultiplier = Number.isFinite(options?.scaleX) && options.scaleX > 0
+    ? options.scaleX
+    : 1;
+  const scaleYMultiplier = Number.isFinite(options?.scaleY) && options.scaleY > 0
+    ? options.scaleY
+    : 1;
+  const scaleZMultiplier = Number.isFinite(options?.scaleZ) && options.scaleZ > 0
+    ? options.scaleZ
+    : 1;
+  const baseScale = 1 / horizontalSpan;
+  const scaleX = baseScale * scaleXMultiplier;
+  const scaleY = baseScale * scaleYMultiplier;
+  const scaleZ = baseScale * scaleZMultiplier;
+
   const mesh = new THREE.Mesh(geometry, material);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
-  mesh.scale.setScalar(scale);
+  mesh.scale.set(scaleX, scaleY, scaleZ);
   mesh.position.set(
-    -center.x * scale,
-    -(box.min.y || 0) * scale,
-    -center.z * scale,
+    -center.x * scaleX,
+    -(box.min.y || 0) * scaleY,
+    -center.z * scaleZ,
   );
 
   const root = new THREE.Group();
   root.add(mesh);
   root.userData.wallMetrics = {
-    height: size.y * scale,
-    spanX: size.x * scale,
-    spanZ: size.z * scale,
+    height: size.y * scaleY,
+    spanX: size.x * scaleX,
+    spanZ: size.z * scaleZ,
     minY: 0,
   };
   return root;
@@ -93,6 +176,7 @@ function toStoragePayload(records) {
     sourceName: record.sourceName,
     objText: record.objText,
     createdAt: record.createdAt,
+    gridMode: normalizeGridMode(record.gridMode),
   }));
 }
 
@@ -113,7 +197,12 @@ export function createCustomAssetRegistry({ THREE, storageKey = STORAGE_KEY } = 
 
     const geometry = parseObjGeometry(record.objText, THREE);
     const material = createMaterialForIndex(THREE, index);
-    const template = createNormalizedTemplate(THREE, geometry, material);
+    const isHex = normalizeGridMode(record.gridMode) === GRID_MODE_HEX;
+    const template = createNormalizedTemplate(THREE, geometry, material, {
+      scaleX: isHex ? HEX_IMPORT_SCALE_X : 1,
+      scaleY: isHex ? HEX_IMPORT_SCALE_Y : 1,
+      scaleZ: isHex ? HEX_IMPORT_SCALE_Z : 1,
+    });
     templates.set(record.id, template);
     return template;
   }
@@ -125,6 +214,7 @@ export function createCustomAssetRegistry({ THREE, storageKey = STORAGE_KEY } = 
       sourceName: sanitizeName(record.sourceName || record.name),
       objText: String(record.objText || ''),
       createdAt: Number(record.createdAt) || Date.now(),
+      gridMode: normalizeGridMode(record.gridMode),
     };
 
     buildTemplate(safeRecord, records.length);
@@ -165,9 +255,10 @@ export function createCustomAssetRegistry({ THREE, storageKey = STORAGE_KEY } = 
     return listRecords();
   }
 
-  async function importFiles(files) {
+  async function importFiles(files, options = {}) {
     const imported = [];
     const rejected = [];
+    const gridMode = normalizeGridMode(options.gridMode);
 
     for (const file of Array.from(files || [])) {
       const lowerName = String(file?.name || '').toLowerCase();
@@ -182,6 +273,7 @@ export function createCustomAssetRegistry({ THREE, storageKey = STORAGE_KEY } = 
           name: file.name.replace(/\.obj$/i, ''),
           sourceName: file.name,
           objText: text,
+          gridMode,
         });
         imported.push(record);
       } catch (error) {
@@ -215,7 +307,9 @@ export function createCustomAssetRegistry({ THREE, storageKey = STORAGE_KEY } = 
       items.push({
         id: `${CUSTOM_VARIANT_PREFIX}${record.id}`,
         label: `Custom Asset_${index + 1}`,
-        meta: record.sourceName,
+        meta: record.gridMode === GRID_MODE_HEX
+          ? `${record.sourceName} • Hex grid`
+          : record.sourceName,
         swatch: DEFAULT_SWATCHES[index % DEFAULT_SWATCHES.length],
       });
     });
@@ -263,30 +357,53 @@ export function createCustomAssetRegistry({ THREE, storageKey = STORAGE_KEY } = 
     return selectedItemId || null;
   }
 
-  function getWallHeight(variantId) {
-    if (!isCustomVariant(variantId)) return 1;
-
-    const assetId = variantId.slice(CUSTOM_VARIANT_PREFIX.length);
-    const recordIndex = records.findIndex((record) => record.id === assetId);
-    if (recordIndex < 0) return 1;
-
-    const record = records[recordIndex];
-    const template = buildTemplate(record, recordIndex);
-    const height = template?.userData?.wallMetrics?.height;
-    return Number.isFinite(height) && height > 0 ? height : 1;
-  }
-
-  function createWallInstance(variantId, { x = 0, y = 0, z = 0 } = {}) {
+  function getRecordForVariant(variantId) {
     if (!isCustomVariant(variantId)) return null;
 
     const assetId = variantId.slice(CUSTOM_VARIANT_PREFIX.length);
     const recordIndex = records.findIndex((record) => record.id === assetId);
     if (recordIndex < 0) return null;
 
-    const record = records[recordIndex];
-    const template = buildTemplate(record, recordIndex);
+    return {
+      record: records[recordIndex],
+      recordIndex,
+    };
+  }
+
+  function getGridModeForVariant(variantId) {
+    const resolvedVariantId = resolveWallSelection(variantId);
+    const entry = getRecordForVariant(resolvedVariantId);
+    return entry ? normalizeGridMode(entry.record.gridMode) : GRID_MODE_DEFAULT;
+  }
+
+  function getPlacementCellForVariant(variantId, world = {}) {
+    const gridMode = getGridModeForVariant(variantId);
+    return getPlacementCellForMode(gridMode, world);
+  }
+
+  function getSnapWorldForVariant(variantId, world = {}) {
+    const gridMode = getGridModeForVariant(variantId);
+    return getSnapWorldForMode(gridMode, world);
+  }
+
+  function getWallHeight(variantId) {
+    const entry = getRecordForVariant(variantId);
+    if (!entry) return 1;
+
+    const template = buildTemplate(entry.record, entry.recordIndex);
+    const height = template?.userData?.wallMetrics?.height;
+    return Number.isFinite(height) && height > 0 ? height : 1;
+  }
+
+  function createWallInstance(variantId, cell = {}) {
+    const entry = getRecordForVariant(variantId);
+    if (!entry) return null;
+
+    const template = buildTemplate(entry.record, entry.recordIndex);
     const instance = cloneTemplate(template);
-    instance.position.set(x, y, z);
+    const placement = getGridPlacementForRecord(entry.record, cell);
+    instance.position.set(placement.x, placement.y, placement.z);
+    instance.userData.gridMode = entry.record.gridMode;
     return instance;
   }
 
@@ -301,6 +418,9 @@ export function createCustomAssetRegistry({ THREE, storageKey = STORAGE_KEY } = 
     isCustomVariant,
     getDefaultWallSelection,
     resolveWallSelection,
+    getGridModeForVariant,
+    getPlacementCellForVariant,
+    getSnapWorldForVariant,
     getWallHeight,
     createWallInstance,
   };

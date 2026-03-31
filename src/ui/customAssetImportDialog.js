@@ -29,13 +29,27 @@ export function createCustomAssetImportDialog(els, callbacks = {}) {
       source.className = 'customImportListMeta';
       source.textContent = record.sourceName || record.name || 'asset.obj';
 
-      row.append(name, source);
+      const mode = document.createElement('div');
+      mode.className = 'customImportListMeta customImportListMeta--mode';
+      mode.textContent = formatGridMode(record);
+
+      row.append(name, source, mode);
       els.assetList.appendChild(row);
     });
   }
 
   function setStatus(message = '') {
     setText(els.status, message);
+  }
+
+  function getImportOptions() {
+    return {
+      gridMode: els.hexToggle?.checked ? 'hex' : 'square',
+    };
+  }
+
+  function formatGridMode(record) {
+    return record?.gridMode === 'hex' ? 'Hex grid' : 'Grid normal';
   }
 
   function setOpen(nextOpen) {
@@ -51,8 +65,9 @@ export function createCustomAssetImportDialog(els, callbacks = {}) {
     setStatus('Import en cours…');
 
     try {
+      const importOptions = getImportOptions();
       const result = typeof callbacks.onFilesSelected === 'function'
-        ? await callbacks.onFilesSelected(Array.from(files))
+        ? await callbacks.onFilesSelected(Array.from(files), importOptions)
         : { imported: [], rejected: [] };
 
       const importedCount = result?.imported?.length || 0;
@@ -60,7 +75,8 @@ export function createCustomAssetImportDialog(els, callbacks = {}) {
       if (importedCount && rejectedCount) {
         setStatus(`${importedCount} OBJ importé(s) • ${rejectedCount} fichier(s) ignoré(s).`);
       } else if (importedCount) {
-        setStatus(`${importedCount} OBJ importé(s) dans custom_asset.`);
+        const gridLabel = importOptions.gridMode === 'hex' ? 'grille hex' : 'grille standard';
+        setStatus(`${importedCount} OBJ importé(s) dans custom_asset • ${gridLabel}.`);
       } else if (rejectedCount) {
         setStatus('Import refusé. Format supporté : .obj');
       } else {
@@ -80,6 +96,16 @@ export function createCustomAssetImportDialog(els, callbacks = {}) {
     els.closeBtn.addEventListener('click', () => {
       setOpen(false);
       if (typeof callbacks.onClose === 'function') callbacks.onClose();
+    });
+  }
+
+  if (els.hexToggle) {
+    els.hexToggle.addEventListener('change', () => {
+      if (!open) return;
+      const gridLabel = els.hexToggle.checked
+        ? 'Import en mode grille hexagonale • scale auto X/Z.'
+        : 'Import en mode grille standard.';
+      setStatus(gridLabel);
     });
   }
 
@@ -127,7 +153,10 @@ export function createCustomAssetImportDialog(els, callbacks = {}) {
   return {
     open() {
       setOpen(true);
-      setStatus('Formats supportés pour cette première version : .obj');
+      const gridLabel = els.hexToggle?.checked
+        ? 'Mode actif : grille hexagonale • scale auto X/Z.'
+        : 'Mode actif : grille standard.';
+      setStatus(`Formats supportés pour cette première version : .obj • ${gridLabel}`);
       if (typeof callbacks.onOpen === 'function') callbacks.onOpen();
     },
     close() {
