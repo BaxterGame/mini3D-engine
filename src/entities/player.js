@@ -60,6 +60,7 @@ export function createPlayerSystem({
   collidesAtPlayer,
   getTimeElapsed,
   getCameraController,
+  getWallGridSnapTarget = null,
   assetLibrary = null,
   INNER_LIMIT = DEFAULT_INNER_LIMIT,
 }) {
@@ -271,8 +272,19 @@ export function createPlayerSystem({
     const isWallMode = player.mode === 'wall';
     const hasMovementInput = moveX !== 0 || moveZ !== 0;
     if (isWallMode && !hasMovementInput) {
-      const snapTargetX = clamp(Math.round(player.x), -INNER_LIMIT, INNER_LIMIT);
-      const snapTargetZ = clamp(Math.round(player.z), -INNER_LIMIT, INNER_LIMIT);
+      const customSnapTarget = typeof getWallGridSnapTarget === 'function'
+        ? getWallGridSnapTarget({ x: player.x, y: 0, z: player.z })
+        : null;
+      const snapTargetX = clamp(
+        Number.isFinite(customSnapTarget?.x) ? customSnapTarget.x : Math.round(player.x),
+        -INNER_LIMIT,
+        INNER_LIMIT,
+      );
+      const snapTargetZ = clamp(
+        Number.isFinite(customSnapTarget?.z) ? customSnapTarget.z : Math.round(player.z),
+        -INNER_LIMIT,
+        INNER_LIMIT,
+      );
 
       const snappedX = smoothToward(player.x, snapTargetX, delta, WALL_GRID_SNAP_LERP_SPEED);
       if (!collidesAtPlayer(snappedX, player.z, player.radius)) {

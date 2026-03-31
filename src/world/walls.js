@@ -340,8 +340,8 @@ const VARIANT_STYLES = Object.freeze({
     metalness: 0.12,
     surfaceY: 0.88,
     radius: 0.5,
-    radialSegments: 8,
-    capSegments: 6,
+    radialSegments: 16,
+    capSegments: 16,
   },
 });
 
@@ -814,6 +814,7 @@ export function createWallsSystem({
   isCustomWallVariant,
   createCustomWallMesh,
   getCustomWallHeight,
+  getPlacementCellForVariant,
   createWallMesh,
 }) {
   let lastWallActionCellKey = '';
@@ -1124,8 +1125,12 @@ export function createWallsSystem({
     const player = getPlayer();
     if (!player) return null;
 
-    const cellX = Math.round(player.x);
-    const cellZ = Math.round(player.z);
+    const currentVariant = getCurrentVariant();
+    const snappedCell = typeof getPlacementCellForVariant === 'function'
+      ? getPlacementCellForVariant(currentVariant, { x: player.x, y: 0, z: player.z })
+      : null;
+    const cellX = Number.isFinite(snappedCell?.x) ? Math.round(snappedCell.x) : Math.round(player.x);
+    const cellZ = Number.isFinite(snappedCell?.z) ? Math.round(snappedCell.z) : Math.round(player.z);
     if (Math.abs(cellX) >= BORDER_HALF || Math.abs(cellZ) >= BORDER_HALF) return null;
     if (isBorderCell(cellX, cellZ)) return null;
 

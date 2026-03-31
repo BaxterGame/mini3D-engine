@@ -623,6 +623,31 @@
       line-height: 1.4;
     }
 
+    .customImportOptions {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      margin-top: 2px;
+    }
+
+    .customImportToggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.04);
+      color: #edf2fb;
+      font-size: 0.8rem;
+      line-height: 1.35;
+      cursor: pointer;
+    }
+
+    .customImportToggle input {
+      margin: 0;
+      accent-color: #74f6ff;
+    }
+
     .customImportActions {
       display: flex;
       gap: 10px;
@@ -675,6 +700,12 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    .customImportListMeta--mode {
+      color: #74f6ff;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
     }
 
     @media (max-width: 860px) {
@@ -818,6 +849,12 @@
         <div id="customAssetDropzone" class="customImportDropzone">
           <div class="customImportDropzoneTitle">Glisser / déposer des fichiers .obj</div>
           <div class="customImportDropzoneMeta">Les assets sont stockés côté navigateur dans un espace logique <strong>custom_asset</strong> et réapparaissent au rechargement.</div>
+          <div class="customImportOptions">
+            <label class="customImportToggle">
+              <input id="customAssetHexToggle" type="checkbox" />
+              <span>Grille hexagonale <br />Décale la pose de <strong>0.5</strong> sur une ligne sur deux et applique un scale auto <strong>X/Z</strong> aux assets importés.</span>
+            </label>
+          </div>
           <div class="customImportActions">
             <button id="customAssetFileBtn" class="btn" type="button">File Import (.obj)</button>
             <input id="customAssetFileInput" type="file" accept=".obj" multiple hidden />
