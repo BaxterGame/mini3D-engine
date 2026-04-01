@@ -464,6 +464,25 @@ const THREE = window.THREE;
     refreshHud();
   }
 
+  function projectMovementIntentToWorld(movementIntent = { x: 0, z: 0 }) {
+    if (!cameraController || cameraController.getFollowMode?.() === 'top') {
+      return { x: movementIntent.x || 0, z: movementIntent.z || 0 };
+    }
+
+    const basis = cameraController.getMovementBasis?.();
+    if (!basis?.right || !basis?.forward) {
+      return { x: movementIntent.x || 0, z: movementIntent.z || 0 };
+    }
+
+    const horizontal = movementIntent.x || 0;
+    const vertical = -(movementIntent.z || 0);
+
+    return {
+      x: basis.right.x * horizontal + basis.forward.x * vertical,
+      z: basis.right.z * horizontal + basis.forward.z * vertical,
+    };
+  }
+
   function handleDiscreteActions() {
     if (actions.consumeInventoryToggle()) {
       toggleInventory();
@@ -606,17 +625,18 @@ const THREE = window.THREE;
         const movementIntent = typeof actions.getMovementIntent === 'function'
           ? actions.getMovementIntent()
           : { x: 0, z: 0 };
-        const directionalHeld = (
-          !!movementIntent?.x
-          || !!movementIntent?.z
-          || input.isDown('arrowleft')
-          || input.isDown('arrowright')
-          || input.isDown('arrowup')
-          || input.isDown('arrowdown')
-        );
+        const directionalHeld = !!movementIntent?.x || !!movementIntent?.z;
+        const movementVector = projectMovementIntentToWorld(movementIntent);
+        const shiftHeld = typeof actions.isSprintHeld === 'function'
+          ? actions.isSprintHeld()
+          : false;
+
         wallsSystem.updatePrimaryActionHold(delta, {
           primaryHeld,
           bypassInitialDelay: directionalHeld,
+          directionalHeld,
+          movementVector,
+          shiftHeld,
         });
       }
 
@@ -695,6 +715,9 @@ const THREE = window.THREE;
       collidesAtPlayer,
       getTimeElapsed: () => timeElapsed,
       getCameraController: () => cameraController,
+      getWallMovementConstraint: () => (wallsSystem && typeof wallsSystem.getActionMovementConstraint === 'function'
+        ? wallsSystem.getActionMovementConstraint()
+        : null),
       getWallGridSnapTarget: (worldPosition) => customAssetRegistry.getSnapWorldForVariant(
         customAssetRegistry.resolveWallSelection(selectedInventoryItems.wall),
         worldPosition,

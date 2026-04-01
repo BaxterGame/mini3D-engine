@@ -26,8 +26,8 @@ export function createState(THREE) {
       metalness: 0.1
     }),
     borderWallMat: new THREE.MeshStandardMaterial({
-      color: 0x142231,
-      emissive: 0x0f2b3e,
+      color: 0xfcfbf0,
+      emissive: 0xfcfbf0,
       emissiveIntensity: 0.16,
       roughness: 0.84,
       metalness: 0.08

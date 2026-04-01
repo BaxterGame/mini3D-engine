@@ -340,8 +340,8 @@ const VARIANT_STYLES = Object.freeze({
     metalness: 0.12,
     surfaceY: 0.88,
     radius: 0.5,
-    radialSegments: 16,
-    capSegments: 16,
+    radialSegments: 8,
+    capSegments: 6,
   },
 });
 
@@ -782,6 +782,8 @@ export function createWallMeshFactory({ THREE, shared }) {
 
 const WALL_ACTION_REPEAT_INITIAL_DELAY = 1.0;
 const WALL_ACTION_REPEAT_DELAY = 0.12;
+const WALL_DIRECTION_LOCK_DOMINANCE_RATIO = 1.35;
+const WALL_DIRECTION_LOCK_EPSILON = 0.0001;
 const WALL_HEIGHT_FALLBACK = 0.4;
 const WALL_BASE_PRECISION = 1000;
 const WALL_BASE_EPSILON = 1 / WALL_BASE_PRECISION;
@@ -826,9 +828,88 @@ export function createWallsSystem({
   let destroySelectionOffsetFromTop = 0;
   let destroySelectionCellKey = '';
   let buildSelectionOffsetFromTop = 0;
+  let directionalTraversalState = null;
+  let directionalTraversalActive = false;
   const renderedEntries = [];
   const materialCache = new Map();
   const variantHeightCache = new Map();
+
+  function normalizeDirectionalStep(value) {
+    if (!Number.isFinite(value) || Math.abs(value) <= WALL_DIRECTION_LOCK_EPSILON) return 0;
+    return value > 0 ? 1 : -1;
+  }
+
+  function quantizeDirectionalTraversal(vector = {}) {
+    const rawX = Number.isFinite(vector.x) ? vector.x : 0;
+    const rawZ = Number.isFinite(vector.z) ? vector.z : 0;
+    const absX = Math.abs(rawX);
+    const absZ = Math.abs(rawZ);
+
+    if (absX <= WALL_DIRECTION_LOCK_EPSILON && absZ <= WALL_DIRECTION_LOCK_EPSILON) return null;
+
+    if (absX > absZ * WALL_DIRECTION_LOCK_DOMINANCE_RATIO) {
+      return { stepX: normalizeDirectionalStep(rawX), stepZ: 0 };
+    }
+
+    if (absZ > absX * WALL_DIRECTION_LOCK_DOMINANCE_RATIO) {
+      return { stepX: 0, stepZ: normalizeDirectionalStep(rawZ) };
+    }
+
+    return {
+      stepX: normalizeDirectionalStep(rawX),
+      stepZ: normalizeDirectionalStep(rawZ),
+    };
+  }
+
+  function clearDirectionalTraversalState() {
+    directionalTraversalState = null;
+    directionalTraversalActive = false;
+  }
+
+  function resetActionRepeatCycle({ clearActionKey = false } = {}) {
+    actionRepeatTimer = 0;
+    actionRepeatStarted = false;
+    if (clearActionKey) lastWallActionCellKey = '';
+  }
+
+  function startDirectionalTraversal(cellX, cellZ, direction) {
+    if (!direction) {
+      directionalTraversalState = null;
+      return;
+    }
+
+    directionalTraversalState = {
+      anchorCellX: cellX,
+      anchorCellZ: cellZ,
+      stepX: direction.stepX,
+      stepZ: direction.stepZ,
+      progress: 0,
+    };
+  }
+
+  function hasDirectionalTraversalChanged(direction) {
+    if (!directionalTraversalState || !direction) return true;
+    return (
+      directionalTraversalState.stepX !== direction.stepX
+      || directionalTraversalState.stepZ !== direction.stepZ
+    );
+  }
+
+  function getDirectionalTraversalProgress(state, cellX, cellZ) {
+    if (!state) return 0;
+
+    const deltaX = cellX - state.anchorCellX;
+    const deltaZ = cellZ - state.anchorCellZ;
+
+    if (state.stepX !== 0 && state.stepZ !== 0) {
+      return Math.max(0, Math.min(deltaX * state.stepX, deltaZ * state.stepZ));
+    }
+
+    if (state.stepX !== 0) return Math.max(0, deltaX * state.stepX);
+    if (state.stepZ !== 0) return Math.max(0, deltaZ * state.stepZ);
+    return 0;
+  }
+
 
   function getSelectedVariantId() {
     const selectedVariant = typeof getSelectedWallVariant === 'function' ? getSelectedWallVariant() : 'brick-dense';
@@ -1056,6 +1137,7 @@ export function createWallsSystem({
     actionRepeatStarted = false;
     primaryActionPrimed = false;
     primaryActionPerformed = false;
+    clearDirectionalTraversalState();
   }
 
   function emitStackFx(cellX, cellZ, y, color, count = 2) {
@@ -1121,6 +1203,13 @@ export function createWallsSystem({
     return walls[walls.length - 1] || null;
   }
 
+  function isValidPlacementCell(cellX, cellZ) {
+    if (!Number.isFinite(cellX) || !Number.isFinite(cellZ)) return false;
+    if (Math.abs(cellX) >= BORDER_HALF || Math.abs(cellZ) >= BORDER_HALF) return false;
+    if (isBorderCell(cellX, cellZ)) return false;
+    return true;
+  }
+
   function getPlayerPlacementCell() {
     const player = getPlayer();
     if (!player) return null;
@@ -1131,8 +1220,7 @@ export function createWallsSystem({
       : null;
     const cellX = Number.isFinite(snappedCell?.x) ? Math.round(snappedCell.x) : Math.round(player.x);
     const cellZ = Number.isFinite(snappedCell?.z) ? Math.round(snappedCell.z) : Math.round(player.z);
-    if (Math.abs(cellX) >= BORDER_HALF || Math.abs(cellZ) >= BORDER_HALF) return null;
-    if (isBorderCell(cellX, cellZ)) return null;
+    if (!isValidPlacementCell(cellX, cellZ)) return null;
 
     return { cellX, cellZ };
   }
@@ -1287,6 +1375,7 @@ export function createWallsSystem({
     actionRepeatTimer = 0;
     actionRepeatStarted = false;
     lastWallActionCellKey = '';
+    clearDirectionalTraversalState();
     primaryActionPerformed = performPrimaryWallActionAtPlayer() || primaryActionPerformed;
   }
 
@@ -1299,11 +1388,8 @@ export function createWallsSystem({
     return performed;
   }
 
-  function performPrimaryWallActionAtPlayer() {
-    const placementCell = getPlayerPlacementCell();
-    if (!placementCell) return false;
-
-    const { cellX: placeX, cellZ: placeZ } = placementCell;
+  function performPrimaryWallActionAtCell(placeX, placeZ) {
+    if (!isValidPlacementCell(placeX, placeZ)) return false;
 
     if (destroyMode) {
       const selectedWall = getSelectedDestroyWallAtCell(placeX, placeZ);
@@ -1335,8 +1421,61 @@ export function createWallsSystem({
     return added || changed;
   }
 
-  function updatePrimaryActionHold(delta, { primaryHeld = false, bypassInitialDelay = false } = {}) {
+  function performPrimaryWallActionAtPlayer() {
+    const placementCell = getPlayerPlacementCell();
+    if (!placementCell) return false;
+
+    return performPrimaryWallActionAtCell(placementCell.cellX, placementCell.cellZ);
+  }
+
+  function updatePrimaryActionHold(delta, {
+    primaryHeld = false,
+    bypassInitialDelay = false,
+    directionalHeld = false,
+    movementVector = null,
+    shiftHeld = false,
+  } = {}) {
     if (!primaryActionPrimed || !primaryHeld) return;
+
+    const placementCell = getPlayerPlacementCell();
+    const allowDirectionalTraversal = directionalHeld && (!shiftHeld || destroyMode);
+    const direction = allowDirectionalTraversal
+      ? quantizeDirectionalTraversal(movementVector)
+      : null;
+
+    if (placementCell && direction) {
+      if (!directionalTraversalActive) {
+        resetActionRepeatCycle();
+      }
+
+      if (!directionalTraversalState || hasDirectionalTraversalChanged(direction)) {
+        startDirectionalTraversal(placementCell.cellX, placementCell.cellZ, direction);
+      }
+
+      directionalTraversalActive = true;
+
+      const progress = getDirectionalTraversalProgress(
+        directionalTraversalState,
+        placementCell.cellX,
+        placementCell.cellZ,
+      );
+
+      while (directionalTraversalState && directionalTraversalState.progress < progress) {
+        directionalTraversalState.progress += 1;
+        const nextCellX = directionalTraversalState.anchorCellX
+          + (directionalTraversalState.stepX * directionalTraversalState.progress);
+        const nextCellZ = directionalTraversalState.anchorCellZ
+          + (directionalTraversalState.stepZ * directionalTraversalState.progress);
+        primaryActionPerformed = performPrimaryWallActionAtCell(nextCellX, nextCellZ) || primaryActionPerformed;
+      }
+      return;
+    }
+
+    if (directionalTraversalActive) {
+      directionalTraversalActive = false;
+      directionalTraversalState = null;
+      resetActionRepeatCycle();
+    }
 
     actionRepeatTimer += delta;
 
@@ -1393,6 +1532,20 @@ export function createWallsSystem({
 
   function isDestroyModeActive() {
     return destroyMode;
+  }
+
+  function getActionMovementConstraint() {
+    if (!primaryActionPrimed || !directionalTraversalActive || !directionalTraversalState) return null;
+
+    return {
+      active: true,
+      anchorX: directionalTraversalState.anchorCellX,
+      anchorZ: directionalTraversalState.anchorCellZ,
+      stepX: directionalTraversalState.stepX,
+      stepZ: directionalTraversalState.stepZ,
+      progress: directionalTraversalState.progress,
+      destroyMode,
+    };
   }
 
   function getStackState() {
@@ -1455,6 +1608,7 @@ export function createWallsSystem({
     isDestroyModeActive,
     nudgeDestroySelection,
     nudgeBuildSelection,
+    getActionMovementConstraint,
     getStackState,
     rebuildVisuals,
     dispose,
