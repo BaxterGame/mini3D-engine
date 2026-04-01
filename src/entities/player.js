@@ -52,6 +52,36 @@ function projectMovementToCamera(movement, cameraController) {
   };
 }
 
+
+function getNormalizedWallMovementConstraint(constraint) {
+  if (!constraint?.active) return null;
+
+  const stepX = Number.isFinite(constraint.stepX) ? constraint.stepX : 0;
+  const stepZ = Number.isFinite(constraint.stepZ) ? constraint.stepZ : 0;
+  if (stepX === 0 && stepZ === 0) return null;
+
+  const direction = normalize2D({ x: stepX, z: stepZ });
+  return {
+    anchorX: Number.isFinite(constraint.anchorX) ? constraint.anchorX : 0,
+    anchorZ: Number.isFinite(constraint.anchorZ) ? constraint.anchorZ : 0,
+    directionX: direction.x,
+    directionZ: direction.z,
+  };
+}
+
+function projectPointToConstraintLine(x, z, constraint) {
+  if (!constraint) return { x, z };
+
+  const dx = x - constraint.anchorX;
+  const dz = z - constraint.anchorZ;
+  const distanceOnLine = (dx * constraint.directionX) + (dz * constraint.directionZ);
+
+  return {
+    x: constraint.anchorX + (constraint.directionX * distanceOnLine),
+    z: constraint.anchorZ + (constraint.directionZ * distanceOnLine),
+  };
+}
+
 export function createPlayerSystem({
   THREE,
   scene,
@@ -60,6 +90,7 @@ export function createPlayerSystem({
   collidesAtPlayer,
   getTimeElapsed,
   getCameraController,
+  getWallMovementConstraint = null,
   getWallGridSnapTarget = null,
   assetLibrary = null,
   INNER_LIMIT = DEFAULT_INNER_LIMIT,
@@ -236,9 +267,18 @@ export function createPlayerSystem({
     const movementIntent = actions ? actions.getMovementIntent() : getLegacyMovementIntent();
     const cameraController = getCameraController ? getCameraController() : null;
     const projectedMovement = projectMovementToCamera(movementIntent, cameraController);
+    const wallMovementConstraint = player.mode === 'wall' && typeof getWallMovementConstraint === 'function'
+      ? getWallMovementConstraint()
+      : null;
+    const normalizedConstraint = getNormalizedWallMovementConstraint(wallMovementConstraint);
 
     let moveX = projectedMovement.x;
     let moveZ = projectedMovement.z;
+
+    if (normalizedConstraint && (moveX !== 0 || moveZ !== 0)) {
+      moveX = normalizedConstraint.directionX;
+      moveZ = normalizedConstraint.directionZ;
+    }
 
     if (moveX !== 0 || moveZ !== 0) {
       const norm = normalize2D({ x: moveX, z: moveZ });
@@ -259,14 +299,28 @@ export function createPlayerSystem({
     const stepX = moveX * speed * delta;
     const stepZ = moveZ * speed * delta;
 
-    const nextX = clamp(player.x + stepX, -INNER_LIMIT, INNER_LIMIT);
-    if (!collidesAtPlayer(nextX, player.z, player.radius)) {
-      player.x = nextX;
-    }
+    if (normalizedConstraint && (moveX !== 0 || moveZ !== 0)) {
+      const projectedTarget = projectPointToConstraintLine(
+        clamp(player.x + stepX, -INNER_LIMIT, INNER_LIMIT),
+        clamp(player.z + stepZ, -INNER_LIMIT, INNER_LIMIT),
+        normalizedConstraint,
+      );
+      const nextX = clamp(projectedTarget.x, -INNER_LIMIT, INNER_LIMIT);
+      const nextZ = clamp(projectedTarget.z, -INNER_LIMIT, INNER_LIMIT);
+      if (!collidesAtPlayer(nextX, nextZ, player.radius)) {
+        player.x = nextX;
+        player.z = nextZ;
+      }
+    } else {
+      const nextX = clamp(player.x + stepX, -INNER_LIMIT, INNER_LIMIT);
+      if (!collidesAtPlayer(nextX, player.z, player.radius)) {
+        player.x = nextX;
+      }
 
-    const nextZ = clamp(player.z + stepZ, -INNER_LIMIT, INNER_LIMIT);
-    if (!collidesAtPlayer(player.x, nextZ, player.radius)) {
-      player.z = nextZ;
+      const nextZ = clamp(player.z + stepZ, -INNER_LIMIT, INNER_LIMIT);
+      if (!collidesAtPlayer(player.x, nextZ, player.radius)) {
+        player.z = nextZ;
+      }
     }
 
     const isWallMode = player.mode === 'wall';

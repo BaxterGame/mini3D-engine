@@ -7,8 +7,8 @@ const CUSTOM_VARIANT_PREFIX = 'wall-custom-asset:';
 const GRID_MODE_DEFAULT = 'square';
 const GRID_MODE_HEX = 'hex';
 const HEX_ROW_OFFSET = 0.5;
-const HEX_IMPORT_SCALE_X = 1;
-const HEX_IMPORT_SCALE_Y = 1.0;
+const HEX_IMPORT_SCALE_X = 1.1;
+const HEX_IMPORT_SCALE_Y = 1.1;
 const HEX_IMPORT_SCALE_Z = 1.25;
 
 function roundToHalfStep(value) {
