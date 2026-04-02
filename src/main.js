@@ -465,7 +465,7 @@ const THREE = window.THREE;
   }
 
   function projectMovementIntentToWorld(movementIntent = { x: 0, z: 0 }) {
-    if (!cameraController || cameraController.getFollowMode?.() === 'top') {
+    if (!cameraController) {
       return { x: movementIntent.x || 0, z: movementIntent.z || 0 };
     }
 
@@ -830,7 +830,7 @@ const THREE = window.THREE;
     toggleProjectionBtn.style.display = 'none';
     if (hintText) {
       hintText.textContent =
-        'WASD = déplacement • R = inventaire • inventaire : flèches / WASD = navigation • gameplay : ↑ / ↓ = zoom, ← / → = rotation 45° • Espace / clic = 1 action • hold = répétition après 1 s • E = mode destruction • en destruction : ↑ / ↓ = cible verticale • Q = cycle murs / projectile / aqua / véhicule • molette = zoom • M = mission / exploration • C = cycle caméra • Z = reset';
+        'WASD = déplacement • R = inventaire • inventaire : flèches / WASD = navigation • gameplay : ↑ / ↓ = zoom, ← / → = rotation 45° • zoom max en perspective = transition FPS • Espace / clic = 1 action • hold = répétition après 1 s • E = mode destruction • en destruction : ↑ / ↓ = cible verticale • Q = cycle murs / projectile / aqua / véhicule • molette = zoom • M = mission / exploration • C = cycle caméra (top / iso / persp / FPS) • Z = reset';
     }
 
     toggleSandboxBtn.addEventListener('click', () => {
@@ -838,8 +838,8 @@ const THREE = window.THREE;
       toggleWorldMode();
     });
 
-    orbitLeftBtn.textContent = '↺ 45°';
-    orbitRightBtn.textContent = '↻ 45°';
+    orbitLeftBtn.textContent = '↺ rotation';
+    orbitRightBtn.textContent = '↻ rotation';
 
     orbitLeftBtn.addEventListener('click', () => {
       if (!cameraController || inventoryOpen) return;

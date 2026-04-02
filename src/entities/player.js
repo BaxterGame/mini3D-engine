@@ -34,7 +34,7 @@ function disposeObject3D(object) {
 }
 
 function projectMovementToCamera(movement, cameraController) {
-  if (!cameraController || cameraController.getFollowMode() === 'top') {
+  if (!cameraController) {
     return { x: movement.x, z: movement.z };
   }
 

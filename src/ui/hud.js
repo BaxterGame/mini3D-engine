@@ -27,6 +27,10 @@ export function createHud(els, config) {
       els.viewValue.textContent = 'CAMÉRA ISO';
       els.viewValue.style.color = '#7ab6ff';
       els.toggleViewBtn.classList.remove('is-active');
+    } else if (model.cameraProjectionMode === 'fps') {
+      els.viewValue.textContent = 'CAMÉRA FPS';
+      els.viewValue.style.color = '#ff9b7a';
+      els.toggleViewBtn.classList.remove('is-active');
     } else {
       els.viewValue.textContent = 'CAMÉRA PERSP';
       els.viewValue.style.color = '#ffd76b';
@@ -37,6 +41,8 @@ export function createHud(els, config) {
       els.projectionValue.textContent = 'TOP 2D';
     } else if (model.cameraProjectionMode === 'iso') {
       els.projectionValue.textContent = 'ISOMÉTRIQUE';
+    } else if (model.cameraProjectionMode === 'fps') {
+      els.projectionValue.textContent = 'FIRST PERSON';
     } else {
       els.projectionValue.textContent = 'PERSPECTIVE';
     }
@@ -48,8 +54,10 @@ export function createHud(els, config) {
       els.statusText.textContent = `${modePrefix} • Top = lecture claire et déplacement libre${modeSuffix}${stackSuffix}`;
     } else if (model.cameraProjectionMode === 'iso') {
       els.statusText.textContent = `${modePrefix} • Caméra isométrique = lecture douce, style maquette${modeSuffix}${stackSuffix}`;
+    } else if (model.cameraProjectionMode === 'fps') {
+      els.statusText.textContent = `${modePrefix} • Caméra FPS = immersion open world${modeSuffix}${stackSuffix}`;
     } else {
-      els.statusText.textContent = `${modePrefix} • Caméra perspective = suivi plus immersif${modeSuffix}${stackSuffix}`;
+      els.statusText.textContent = `${modePrefix} • Caméra perspective = angle conservé et lecture cohérente${modeSuffix}${stackSuffix}`;
     }
 
     els.toggleSandboxBtn.classList.toggle('is-active', model.worldMode === 'exploration');
