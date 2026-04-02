@@ -1,19 +1,19 @@
-// mini-engine v0.2j — transitions caméra fluidifiées + angle cohérent + snap diagonal rétabli
-// Cycle caméra : top -> iso -> perspective
-// Rotation : pas de 45° partagés entre top / iso / perspective / fps.
+// mini-engine v0.2i — transitions caméra fluidifiées + angle cohérent + snap diagonal rétabli
+// Cycle caméra : top -> iso -> perspective -> fps
+// Rotation : pas de 45° partagés entre iso / perspective / fps.
 // Zoom : flèches haut / bas + molette souris, avec bascule douce vers le FPS.
 
 import { rotateVector } from '../utils/math.js';
 import { setOrthoSize } from './renderer.js';
 
-const CAMERA_MODE_ORDER = ['top', 'iso', 'perspective'];
+const CAMERA_MODE_ORDER = ['top', 'iso', 'perspective', 'fps'];
 const CAMERA_ORBIT_STEP_ANGLE = Math.PI / 4;
 const MIN_ZOOM_LEVEL = -7;
 const MAX_PERSPECTIVE_ZOOM_LEVEL = 5;
 const DEFAULT_ORTHO_SIZE = 22;
 const DEFAULT_PERSPECTIVE_FOV = 56;
 const FPS_FOV = 62;
-const MODE_TRANSITION_DURATION = 0.30;
+const MODE_TRANSITION_DURATION = 0.24;
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -190,7 +190,7 @@ export function createCameraController({ THREE, orthoCamera, perspectiveCamera, 
 
     const forward = getViewForward(orbitAngle);
     const cameraBack = 1.0;
-    const cameraLift = 2;
+    const cameraLift = 1.5;
     const lookAhead = 12;
     const lookLift = 1.1;
 
@@ -231,8 +231,7 @@ export function createCameraController({ THREE, orthoCamera, perspectiveCamera, 
   }
 
   function cycleMode() {
-    const currentMode = cameraMode === 'fps' ? 'perspective' : cameraMode;
-    const currentIndex = CAMERA_MODE_ORDER.indexOf(currentMode);
+    const currentIndex = CAMERA_MODE_ORDER.indexOf(cameraMode);
     const nextIndex = (currentIndex + 1) % CAMERA_MODE_ORDER.length;
     const nextMode = CAMERA_MODE_ORDER[nextIndex];
 
@@ -307,7 +306,6 @@ export function createCameraController({ THREE, orthoCamera, perspectiveCamera, 
     let targetFov = descriptor.fov;
     let targetTopUp = descriptor.topUp || { x: 0, z: -1 };
     let nextRenderMode = cameraMode;
-    let transitionCompleted = true;
 
     if (transitionState.active) {
       transitionState.elapsed += Math.max(0, delta);
@@ -322,19 +320,13 @@ export function createCameraController({ THREE, orthoCamera, perspectiveCamera, 
 
       const startFamily = getProjectionFamily(transitionState.startRenderMode);
       const targetFamily = getProjectionFamily(cameraMode);
-      if (startFamily !== targetFamily && rawProgress < 0.2) {
+      if (startFamily !== targetFamily && rawProgress < 0.5) {
         nextRenderMode = transitionState.startRenderMode;
       }
 
       if (rawProgress >= 1) {
         transitionState.active = false;
         nextRenderMode = cameraMode;
-        transitionCompleted = true;
-        desiredPos = descriptor.pos;
-        desiredLook = descriptor.look;
-        targetOrthoSize = descriptor.orthoSize;
-        targetFov = descriptor.fov;
-        targetTopUp = descriptor.topUp || targetTopUp;
       }
     }
 
@@ -346,11 +338,7 @@ export function createCameraController({ THREE, orthoCamera, perspectiveCamera, 
       } else {
         orthoCamera.up.set(0, 1, 0);
       }
-      if (transitionCompleted) {
-        orthoSize = targetOrthoSize;
-      } else {
-        orthoSize += (targetOrthoSize - orthoSize) * orthoSmooth;
-      }
+      orthoSize += (targetOrthoSize - orthoSize) * orthoSmooth;
       setOrthoSize(orthoCamera, orthoSize);
     }
 
@@ -362,9 +350,6 @@ export function createCameraController({ THREE, orthoCamera, perspectiveCamera, 
       cameraState.pos.copy(desiredPos);
       cameraState.look.copy(desiredLook);
       cameraState.ready = true;
-    } else if (transitionCompleted) {
-      cameraState.pos.copy(desiredPos);
-      cameraState.look.copy(desiredLook);
     } else {
       cameraState.pos.lerp(desiredPos, posSmooth);
       cameraState.look.lerp(desiredLook, lookSmooth);
