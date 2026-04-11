@@ -51,16 +51,32 @@ export function createActionController(input) {
       return input.consumePress('m');
     },
     consumeRotateLeft() {
+      if (input.isDown('shift')) return false;
       return input.consumePress('arrowleft') || input.consumePress('j');
     },
     consumeRotateRight() {
+      if (input.isDown('shift')) return false;
       return input.consumePress('arrowright') || input.consumePress('l');
     },
     consumeZoomIn() {
+      if (input.isDown('shift')) return false;
       return input.consumePress('arrowup');
     },
     consumeZoomOut() {
+      if (input.isDown('shift')) return false;
       return input.consumePress('arrowdown');
+    },
+    consumeBuildHeightUp() {
+      return input.isDown('shift') && input.consumePress('arrowup');
+    },
+    consumeBuildHeightDown() {
+      return input.isDown('shift') && input.consumePress('arrowdown');
+    },
+    consumeAssetRotateLeft() {
+      return input.isDown('shift') && input.consumePress('arrowleft');
+    },
+    consumeAssetRotateRight() {
+      return input.isDown('shift') && input.consumePress('arrowright');
     },
     consumeInventoryLeft() {
       return input.consumePress('arrowleft') || input.consumePress('a');

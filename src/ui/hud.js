@@ -2,6 +2,16 @@
 // Ajoute un rappel léger du mode player et de l'état d'inventaire.
 
 export function createHud(els, config) {
+  function formatRadiansAsDegrees(value) {
+    if (!Number.isFinite(value)) return '0';
+    return `${Math.round((value * 180) / Math.PI)}`;
+  }
+
+  function formatRotationDebug(model) {
+    if (!model || model.playerModeLabel !== 'WALL') return '';
+    return ` • DBG rotY ${formatRadiansAsDegrees(model.wallRotationY)}° | X ${formatRadiansAsDegrees(model.wallTiltX)}° | Z ${formatRadiansAsDegrees(model.wallRollZ)}° | stage ${model.wallAxisStage ?? 0}`;
+  }
+
   function formatStackInfo(model) {
     if (!model || model.playerModeLabel !== 'WALL') return '';
     const level = Number.isFinite(model.wallStackDisplayLevel)
@@ -18,6 +28,7 @@ export function createHud(els, config) {
     const modePrefix = model.worldMode === 'exploration' ? 'Exploration' : 'Mission';
     const modeSuffix = model.playerModeLabel ? ` • Mode ${model.playerModeLabel}` : '';
     const stackSuffix = formatStackInfo(model);
+    const debugSuffix = formatRotationDebug(model);
 
     if (model.followMode === 'top') {
       els.viewValue.textContent = 'TOP';
@@ -51,13 +62,13 @@ export function createHud(els, config) {
       const selection = model.inventorySelectionLabel ? ` • ${model.inventorySelectionLabel}` : '';
       els.statusText.textContent = `Inventaire ouvert • flèches / WASD = naviguer • R = fermer${selection}${modeSuffix}`;
     } else if (model.followMode === 'top') {
-      els.statusText.textContent = `${modePrefix} • Top = lecture claire et déplacement libre${modeSuffix}${stackSuffix}`;
+      els.statusText.textContent = `${modePrefix} • Top = lecture claire et déplacement libre${modeSuffix}${stackSuffix}${debugSuffix}`;
     } else if (model.cameraProjectionMode === 'iso') {
-      els.statusText.textContent = `${modePrefix} • Caméra isométrique = lecture douce, style maquette${modeSuffix}${stackSuffix}`;
+      els.statusText.textContent = `${modePrefix} • Caméra isométrique = lecture douce, style maquette${modeSuffix}${stackSuffix}${debugSuffix}`;
     } else if (model.cameraProjectionMode === 'fps') {
-      els.statusText.textContent = `${modePrefix} • Caméra FPS = immersion open world${modeSuffix}${stackSuffix}`;
+      els.statusText.textContent = `${modePrefix} • Caméra FPS = immersion open world${modeSuffix}${stackSuffix}${debugSuffix}`;
     } else {
-      els.statusText.textContent = `${modePrefix} • Caméra perspective = angle conservé et lecture cohérente${modeSuffix}${stackSuffix}`;
+      els.statusText.textContent = `${modePrefix} • Caméra perspective = angle conservé et lecture cohérente${modeSuffix}${stackSuffix}${debugSuffix}`;
     }
 
     els.toggleSandboxBtn.classList.toggle('is-active', model.worldMode === 'exploration');
