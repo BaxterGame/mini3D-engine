@@ -34,7 +34,7 @@ function disposeObject3D(object) {
 }
 
 function projectMovementToCamera(movement, cameraController) {
-  if (!cameraController) {
+  if (!cameraController || cameraController.getFollowMode() === 'top') {
     return { x: movement.x, z: movement.z };
   }
 
@@ -92,6 +92,7 @@ export function createPlayerSystem({
   getCameraController,
   getWallMovementConstraint = null,
   getWallGridSnapTarget = null,
+  getBuildPreviewDescriptor = null,
   assetLibrary = null,
   INNER_LIMIT = DEFAULT_INNER_LIMIT,
 }) {
@@ -99,6 +100,10 @@ export function createPlayerSystem({
   let group = null;
   let core = null;
   let halo = null;
+  let editPreview = null;
+  let editPreviewKey = '';
+  let editPreviewVisible = false;
+  let directionHint = null;
   const buildIndicator = {
     active: false,
     level: 0,
@@ -109,6 +114,8 @@ export function createPlayerSystem({
     previewCellX: 0,
     previewCellZ: 0,
     stepHeight: 1,
+    rotationY: 0,
+    showDirectionHint: false,
   };
 
   function getLegacyMovementIntent() {
@@ -137,13 +144,119 @@ export function createPlayerSystem({
     return def.createCore(THREE);
   }
 
+  function clearEditPreview() {
+    if (!group || !editPreview) return;
+    group.remove(editPreview);
+    disposeObject3D(editPreview);
+    editPreview = null;
+    editPreviewKey = '';
+  }
+
+  function setCoreVisible(visible) {
+    if (core) core.visible = visible;
+  }
+
+  function buildPreviewKey(descriptor) {
+    if (!descriptor) return '';
+    return [
+      descriptor.variantId || 'none',
+      Number.isFinite(descriptor.rotationY) ? descriptor.rotationY.toFixed(3) : '0',
+      Number.isFinite(descriptor.tiltX) ? descriptor.tiltX.toFixed(3) : '0',
+      Number.isFinite(descriptor.rotationZ) ? descriptor.rotationZ.toFixed(3) : '0',
+      Number.isFinite(descriptor.offsetY) ? descriptor.offsetY.toFixed(3) : '0',
+    ].join('|');
+  }
+
+  function createEditPreviewVisual(descriptor) {
+    if (!descriptor) return null;
+
+    if (typeof descriptor.createPreview === 'function') {
+      const preview = descriptor.createPreview();
+      if (preview) return preview;
+    }
+
+    const fallback = new THREE.Mesh(
+      new THREE.BoxGeometry(0.72, 0.72, 0.72),
+      new THREE.MeshStandardMaterial({
+        color: 0x66ccff,
+        transparent: true,
+        opacity: 0.82,
+        roughness: 0.55,
+        metalness: 0.04,
+      }),
+    );
+    fallback.castShadow = true;
+    fallback.receiveShadow = true;
+    return fallback;
+  }
+
+  function alignPreviewCenterToLocalY(targetLocalCenterY = 0) {
+    if (!editPreview || !group) return;
+    editPreview.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(editPreview);
+    if (!Number.isFinite(bounds.min.y) || !Number.isFinite(bounds.max.y)) return;
+    const localCenterY = ((bounds.min.y + bounds.max.y) * 0.5) - group.position.y;
+    editPreview.position.y += targetLocalCenterY - localCenterY;
+    editPreview.updateMatrixWorld(true);
+  }
+
+  function applyEditPreviewTransform(descriptor) {
+    if (!editPreview || !descriptor) return;
+
+    editPreview.position.set(
+      Number.isFinite(descriptor.offsetX) ? descriptor.offsetX : 0,
+      Number.isFinite(descriptor.offsetY) ? descriptor.offsetY : 0,
+      Number.isFinite(descriptor.offsetZ) ? descriptor.offsetZ : 0,
+    );
+
+    editPreview.rotation.set(
+      Number.isFinite(descriptor.tiltX) ? descriptor.tiltX : 0,
+      Number.isFinite(descriptor.rotationY) ? descriptor.rotationY : 0,
+      Number.isFinite(descriptor.rotationZ) ? descriptor.rotationZ : 0,
+    );
+
+    alignPreviewCenterToLocalY(Number.isFinite(descriptor.offsetY) ? descriptor.offsetY : 0);
+  }
+
+  function syncEditPreview(descriptor) {
+    const nextKey = buildPreviewKey(descriptor);
+    if (!descriptor) {
+      clearEditPreview();
+      return;
+    }
+
+    if (!editPreview || editPreviewKey !== nextKey) {
+      clearEditPreview();
+      editPreview = createEditPreviewVisual(descriptor);
+      editPreviewKey = nextKey;
+      if (editPreview) group.add(editPreview);
+    }
+
+    applyEditPreviewTransform(descriptor);
+  }
+
+  
   function getIndicatorLocalY() {
     if (!group) return 0;
-    const previewTopY = Number.isFinite(buildIndicator.previewTopY)
-      ? buildIndicator.previewTopY
-      : ((Number.isFinite(buildIndicator.previewCenterY) ? buildIndicator.previewCenterY : 0.5)
-        + ((Number.isFinite(buildIndicator.stepHeight) ? buildIndicator.stepHeight : 1) * 0.5));
-    return previewTopY - group.position.y;
+    const previewCenterY = Number.isFinite(buildIndicator.previewCenterY) ? buildIndicator.previewCenterY : 0.5;
+    const supportTopY = Number.isFinite(buildIndicator.supportTopY) ? buildIndicator.supportTopY : 0;
+    const manualBaseY = Number.isFinite(buildIndicator.manualBaseY) ? buildIndicator.manualBaseY : 0;
+    const selectionOffset = Number.isFinite(buildIndicator.buildSelectionOffsetFromTop)
+      ? buildIndicator.buildSelectionOffsetFromTop
+      : 0;
+
+    if (buildIndicator.destroyMode) {
+      return previewCenterY - group.position.y;
+    }
+
+    const isRaisedInAirSelection = manualBaseY > (supportTopY + 1e-4);
+    const isStackSelection = supportTopY > 1e-4 || selectionOffset > 0;
+
+    if (isRaisedInAirSelection || isStackSelection) {
+      return previewCenterY - group.position.y;
+    }
+
+    return Number.isFinite(halo?.userData?.baseY) ? halo.userData.baseY : 0;
   }
 
   function getIndicatorLocalXZ() {
@@ -184,6 +297,20 @@ export function createPlayerSystem({
     halo.userData.runtimeScaleBase = showBuildIndicator
       ? (buildIndicator.destroyMode ? 1.08 : 1.03)
       : 1;
+
+    if (directionHint) {
+      const showHint = showBuildIndicator && !buildIndicator.destroyMode && !!buildIndicator.showDirectionHint;
+      directionHint.visible = showHint;
+      if (showHint) {
+        const radius = 1.02;
+        const localPos = getIndicatorLocalXZ();
+        const rot = Number.isFinite(buildIndicator.rotationY) ? buildIndicator.rotationY : 0;
+        const worldX = group.position.x + localPos.x + (Math.sin(rot) * radius);
+        const worldY = group.position.y + getIndicatorLocalY();
+        const worldZ = group.position.z + localPos.z + (Math.cos(rot) * radius);
+        directionHint.position.set(worldX, worldY, worldZ);
+      }
+    }
   }
 
   function rebuildVisualForMode(mode) {
@@ -202,6 +329,15 @@ export function createPlayerSystem({
       halo = null;
     }
 
+    clearEditPreview();
+    editPreviewVisible = false;
+
+    if (directionHint) {
+      scene.remove(directionHint);
+      disposeObject3D(directionHint);
+      directionHint = null;
+    }
+
     core = createCoreVisual(mode, def);
     halo = def.createHalo(THREE);
 
@@ -217,6 +353,17 @@ export function createPlayerSystem({
       group.add(halo);
       applyHaloBaseState();
     }
+
+    directionHint = new THREE.Mesh(
+      new THREE.SphereGeometry(0.12, 12, 10),
+      new THREE.MeshBasicMaterial({
+        color: 0x2aa8ff,
+        transparent: true,
+        opacity: 0.92,
+      }),
+    );
+    directionHint.visible = false;
+    scene.add(directionHint);
   }
 
   function setMode(mode) {
@@ -255,10 +402,22 @@ export function createPlayerSystem({
     player.lastMove.x = 0;
     player.lastMove.z = -1;
 
-    if (group) {
+     if (group) {
       group.position.set(0, 0.95, 0);
       group.rotation.set(0, 0, 0);
     }
+
+    clearEditPreview();
+    editPreviewVisible = false;
+    setCoreVisible(true);
+
+    clearEditPreview();
+    editPreviewVisible = false;
+    setCoreVisible(true);
+
+    clearEditPreview();
+    editPreviewVisible = false;
+    setCoreVisible(true);
   }
 
   function update(delta) {
@@ -352,15 +511,35 @@ export function createPlayerSystem({
     }
 
     const t = getTimeElapsed ? getTimeElapsed() : 0;
+    const shouldShowEditPreview = player.mode === 'wall'
+      && sprintHeld
+      && !buildIndicator.destroyMode
+      && typeof getBuildPreviewDescriptor === 'function';
+    const previewDescriptor = shouldShowEditPreview ? getBuildPreviewDescriptor() : null;
+
     if (group) {
       group.position.x = player.x;
       group.position.z = player.z;
       group.position.y = 0.95 + Math.sin(t * 5.6) * 0.06;
 
-      if (player.mode === 'projectile' || player.mode === 'vehicle') {
-        group.rotation.y = player.yaw;
+      if (previewDescriptor) {
+        group.rotation.set(0, 0, 0);
+        setCoreVisible(false);
+        syncEditPreview(previewDescriptor);
+        editPreviewVisible = true;
       } else {
-        group.rotation.y += delta * 1.25;
+        if (editPreviewVisible) {
+          clearEditPreview();
+          editPreviewVisible = false;
+        }
+
+        setCoreVisible(true);
+
+        if (player.mode === 'projectile' || player.mode === 'vehicle') {
+          group.rotation.y = player.yaw;
+        } else {
+          group.rotation.y += delta * 1.25;
+        }
       }
     }
 
@@ -391,6 +570,11 @@ export function createPlayerSystem({
     buildIndicator.previewCellX = Number.isFinite(state.previewCellX) ? state.previewCellX : 0;
     buildIndicator.previewCellZ = Number.isFinite(state.previewCellZ) ? state.previewCellZ : 0;
     buildIndicator.stepHeight = Number.isFinite(state.stepHeight) ? state.stepHeight : 1;
+    buildIndicator.rotationY = Number.isFinite(state.rotationY) ? state.rotationY : 0;
+    buildIndicator.supportTopY = Number.isFinite(state.supportTopY) ? state.supportTopY : 0;
+    buildIndicator.manualBaseY = Number.isFinite(state.manualBaseY) ? state.manualBaseY : 0;
+    buildIndicator.buildSelectionOffsetFromTop = Number.isFinite(state.buildSelectionOffsetFromTop) ? state.buildSelectionOffsetFromTop : 0;
+    buildIndicator.showDirectionHint = !!state.showDirectionHint;
     applyHaloBaseState();
   }
 

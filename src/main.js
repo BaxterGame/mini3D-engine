@@ -401,6 +401,10 @@ const THREE = window.THREE;
       : { level: -1, displayLevel: 0, stepHeight: 0, destroyMode: false };
 
     if (playerSystem && typeof playerSystem.setBuildIndicator === 'function') {
+      const selectedWallVariant = selectedInventoryItems.wall;
+      const resolvedWallVariant = typeof customAssetRegistry.resolveWallSelection === 'function'
+        ? customAssetRegistry.resolveWallSelection(selectedWallVariant)
+        : selectedWallVariant;
       playerSystem.setBuildIndicator({
         active: !inventoryOpen && !!modeSystem && typeof modeSystem.getCurrentMode === 'function' && modeSystem.getCurrentMode() === 'wall',
         level: stackState.level,
@@ -411,6 +415,11 @@ const THREE = window.THREE;
         previewCellX: stackState.previewCellX,
         previewCellZ: stackState.previewCellZ,
         stepHeight: stackState.stepHeight,
+        supportTopY: stackState.supportTopY,
+        manualBaseY: stackState.manualBaseY,
+        buildSelectionOffsetFromTop: stackState.buildSelectionOffsetFromTop,
+        rotationY: stackState.rotationY,
+        showDirectionHint: !!resolvedWallVariant && typeof customAssetRegistry.isCustomVariant === 'function' && customAssetRegistry.isCustomVariant(resolvedWallVariant),
       });
     }
 
@@ -465,7 +474,7 @@ const THREE = window.THREE;
   }
 
   function projectMovementIntentToWorld(movementIntent = { x: 0, z: 0 }) {
-    if (!cameraController) {
+    if (!cameraController || cameraController.getFollowMode?.() === 'top') {
       return { x: movementIntent.x || 0, z: movementIntent.z || 0 };
     }
 
@@ -567,31 +576,43 @@ const THREE = window.THREE;
       && typeof modeSystem.getCurrentMode === 'function'
       && modeSystem.getCurrentMode() === 'wall';
 
-    if (actions.consumeZoomIn()) {
+    if (actions.consumeBuildHeightUp()) {
       if (wallModeActive && wallDestroyModeActive && wallsSystem && typeof wallsSystem.nudgeDestroySelection === 'function') {
         wallsSystem.nudgeDestroySelection(1);
       } else if (wallModeActive && wallsSystem && typeof wallsSystem.nudgeBuildSelection === 'function') {
         wallsSystem.nudgeBuildSelection(1);
-      } else if (cameraController) {
-        cameraController.zoomBy(1);
       }
     }
 
-    if (actions.consumeZoomOut()) {
+    if (actions.consumeBuildHeightDown()) {
       if (wallModeActive && wallDestroyModeActive && wallsSystem && typeof wallsSystem.nudgeDestroySelection === 'function') {
         wallsSystem.nudgeDestroySelection(-1);
       } else if (wallModeActive && wallsSystem && typeof wallsSystem.nudgeBuildSelection === 'function') {
         wallsSystem.nudgeBuildSelection(-1);
-      } else if (cameraController) {
-        cameraController.zoomBy(-1);
       }
     }
 
-    if (actions.consumeRotateLeft() && cameraController) {
+    if (actions.consumeZoomIn() && cameraController) {
+      cameraController.zoomBy(1);
+    }
+
+    if (actions.consumeZoomOut() && cameraController) {
+      cameraController.zoomBy(-1);
+    }
+
+    if (actions.consumeAssetRotateLeft()) {
+      if (wallModeActive && wallsSystem && typeof wallsSystem.rotateSelectedAsset === 'function') {
+        wallsSystem.rotateSelectedAsset(1);
+      }
+    } else if (actions.consumeRotateLeft() && cameraController) {
       cameraController.rotateOrbit(-1);
     }
 
-    if (actions.consumeRotateRight() && cameraController) {
+    if (actions.consumeAssetRotateRight()) {
+      if (wallModeActive && wallsSystem && typeof wallsSystem.rotateSelectedAsset === 'function') {
+        wallsSystem.rotateSelectedAsset(-1);
+      }
+    } else if (actions.consumeRotateRight() && cameraController) {
       cameraController.rotateOrbit(1);
     }
 
@@ -722,6 +743,23 @@ const THREE = window.THREE;
         customAssetRegistry.resolveWallSelection(selectedInventoryItems.wall),
         worldPosition,
       ),
+      getBuildPreviewDescriptor: () => {
+        if (!wallsSystem || typeof wallsSystem.getSelectedWallPreviewVisual !== 'function') return null;
+
+        const previewData = wallsSystem.getSelectedWallPreviewVisual();
+        if (!previewData || !previewData.object) return null;
+
+        return {
+          variantId: previewData.key || 'preview',
+          rotationY: Number.isFinite(previewData.rotationY) ? previewData.rotationY : 0,
+          tiltX: Number.isFinite(previewData.tiltX) ? previewData.tiltX : 0,
+          rotationZ: Number.isFinite(previewData.rollZ) ? previewData.rollZ : 0,
+          offsetX: 0,
+          offsetY: 0,
+          offsetZ: 0,
+          createPreview: () => previewData.object,
+        };
+      },
       assetLibrary,
       INNER_LIMIT,
     });
@@ -830,7 +868,7 @@ const THREE = window.THREE;
     toggleProjectionBtn.style.display = 'none';
     if (hintText) {
       hintText.textContent =
-        'WASD = déplacement • R = inventaire • inventaire : flèches / WASD = navigation • gameplay : ↑ / ↓ = zoom, ← / → = rotation 45° • zoom max en perspective = transition FPS • Espace / clic = 1 action • hold = répétition après 1 s • E = mode destruction • en destruction : ↑ / ↓ = cible verticale • Q = cycle murs / projectile / aqua / véhicule • molette = zoom • M = mission / exploration • C = cycle caméra (top / iso / persp / FPS) • Z = reset';
+        'WASD = déplacement • R = inventaire • inventaire : flèches / WASD = navigation • gameplay : ↑ / ↓ = zoom, ← / → = rotation caméra 45°, Shift+↑ / Shift+↓ = hauteur build, Shift+← / Shift+→ = rotation asset • Espace / clic = 1 action • hold = répétition après 1 s • E = mode destruction • en destruction : ↑ / ↓ = cible verticale • Q = cycle murs / projectile / aqua / véhicule • molette = zoom • M = mission / exploration • C = cycle caméra • Z = reset';
     }
 
     toggleSandboxBtn.addEventListener('click', () => {
@@ -838,8 +876,8 @@ const THREE = window.THREE;
       toggleWorldMode();
     });
 
-    orbitLeftBtn.textContent = '↺ rotation';
-    orbitRightBtn.textContent = '↻ rotation';
+    orbitLeftBtn.textContent = '↺ 45°';
+    orbitRightBtn.textContent = '↻ 45°';
 
     orbitLeftBtn.addEventListener('click', () => {
       if (!cameraController || inventoryOpen) return;

@@ -403,6 +403,9 @@ export function createCustomAssetRegistry({ THREE, storageKey = STORAGE_KEY } = 
     const instance = cloneTemplate(template);
     const placement = getGridPlacementForRecord(entry.record, cell);
     instance.position.set(placement.x, placement.y, placement.z);
+    instance.rotation.y = Number.isFinite(cell?.rotationY) ? cell.rotationY : 0;
+    instance.rotation.x = Number.isFinite(cell?.tiltX) ? cell.tiltX : 0;
+    instance.rotation.z = Number.isFinite(cell?.rollZ) ? cell.rollZ : 0;
     instance.userData.gridMode = entry.record.gridMode;
     return instance;
   }
