@@ -34,11 +34,7 @@ function disposeObject3D(object) {
 }
 
 function projectMovementToCamera(movement, cameraController) {
-  if (!cameraController || cameraController.getFollowMode() === 'top') {
-    return { x: movement.x, z: movement.z };
-  }
-
-  const basis = cameraController.getMovementBasis?.();
+  const basis = cameraController?.getMovementBasis?.();
   if (!basis?.right || !basis?.forward) {
     return { x: movement.x, z: movement.z };
   }

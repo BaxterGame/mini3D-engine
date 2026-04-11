@@ -474,11 +474,7 @@ const THREE = window.THREE;
   }
 
   function projectMovementIntentToWorld(movementIntent = { x: 0, z: 0 }) {
-    if (!cameraController || cameraController.getFollowMode?.() === 'top') {
-      return { x: movementIntent.x || 0, z: movementIntent.z || 0 };
-    }
-
-    const basis = cameraController.getMovementBasis?.();
+    const basis = cameraController?.getMovementBasis?.();
     if (!basis?.right || !basis?.forward) {
       return { x: movementIntent.x || 0, z: movementIntent.z || 0 };
     }
