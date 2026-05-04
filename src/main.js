@@ -702,6 +702,10 @@ const THREE = window.THREE;
       activeCamera = cameraController.update(delta, timeElapsed, player);
     }
 
+    if (customAssetRegistry && typeof customAssetRegistry.update === 'function') {
+      customAssetRegistry.update(timeElapsed);
+    }
+
     updateInventoryUi();
     refreshHud();
     renderer.render(scene, activeCamera);
