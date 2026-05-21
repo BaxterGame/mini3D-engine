@@ -6,7 +6,7 @@ import { INNER_LIMIT as DEFAULT_INNER_LIMIT } from '../config.js';
 import { getPlayerModeDef } from './playerModes.js';
 
 const WALL_GRID_SNAP_EPSILON = 0.001;
-const WALL_GRID_SNAP_LERP_SPEED = 12;
+const WALL_GRID_SNAP_LERP_SPEED = 22;
 
 function smoothToward(current, target, delta, speed) {
   if (!Number.isFinite(current) || !Number.isFinite(target)) return target;
@@ -449,7 +449,7 @@ export function createPlayerSystem({
     }
 
     const sprintHeld = actions ? actions.isSprintHeld() : !!(keys && keys.shift);
-    const speed = player.speed * getSpeedMultiplier() * (sprintHeld ? 1.22 : 1.0);
+    const speed = player.speed * getSpeedMultiplier() * (sprintHeld ? 1.0 : 1.0);
 
     const stepX = moveX * speed * delta;
     const stepZ = moveZ * speed * delta;

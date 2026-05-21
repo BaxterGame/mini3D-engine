@@ -396,8 +396,16 @@ const THREE = window.THREE;
   }
 
   function refreshHud() {
+    const wallModeActive = !inventoryOpen
+      && !!modeSystem
+      && typeof modeSystem.getCurrentMode === 'function'
+      && modeSystem.getCurrentMode() === 'wall';
+    const editSelectionHold = wallModeActive
+      && actions
+      && typeof actions.isSprintHeld === 'function'
+      && actions.isSprintHeld();
     const stackState = wallsSystem && typeof wallsSystem.getStackState === 'function'
-      ? wallsSystem.getStackState()
+      ? wallsSystem.getStackState({ preserveSelection: editSelectionHold })
       : { level: -1, displayLevel: 0, stepHeight: 0, destroyMode: false };
 
     if (playerSystem && typeof playerSystem.setBuildIndicator === 'function') {
@@ -406,7 +414,7 @@ const THREE = window.THREE;
         ? customAssetRegistry.resolveWallSelection(selectedWallVariant)
         : selectedWallVariant;
       playerSystem.setBuildIndicator({
-        active: !inventoryOpen && !!modeSystem && typeof modeSystem.getCurrentMode === 'function' && modeSystem.getCurrentMode() === 'wall',
+        active: wallModeActive,
         level: stackState.level,
         destroyMode: !!stackState.destroyMode,
         previewBaseY: stackState.previewBaseY,
@@ -634,8 +642,12 @@ const THREE = window.THREE;
       const primaryHeld = actions.isPrimaryActionHeld();
       const primaryReleased = actions.consumePrimaryActionRelease();
 
+      const shiftHeld = typeof actions.isSprintHeld === 'function'
+        ? actions.isSprintHeld()
+        : false;
+
       if (primaryPressed && typeof wallsSystem.beginPrimaryActionHold === 'function') {
-        wallsSystem.beginPrimaryActionHold();
+        wallsSystem.beginPrimaryActionHold({ preserveSelection: shiftHeld });
       }
 
       if (typeof wallsSystem.updatePrimaryActionHold === 'function') {
@@ -644,9 +656,6 @@ const THREE = window.THREE;
           : { x: 0, z: 0 };
         const directionalHeld = !!movementIntent?.x || !!movementIntent?.z;
         const movementVector = projectMovementIntentToWorld(movementIntent);
-        const shiftHeld = typeof actions.isSprintHeld === 'function'
-          ? actions.isSprintHeld()
-          : false;
 
         wallsSystem.updatePrimaryActionHold(delta, {
           primaryHeld,
@@ -659,7 +668,7 @@ const THREE = window.THREE;
 
       if (primaryReleased) {
         if (typeof wallsSystem.endPrimaryActionHold === 'function') {
-          wallsSystem.endPrimaryActionHold({ allowTap: true });
+          wallsSystem.endPrimaryActionHold({ allowTap: true, preserveSelection: shiftHeld });
         } else if (typeof wallsSystem.clearLastActionCell === 'function') {
           wallsSystem.clearLastActionCell();
         }

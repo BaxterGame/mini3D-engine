@@ -11,6 +11,7 @@ const HEX_ROW_OFFSET = 0.5;
 const HEX_IMPORT_SCALE_X = 1.25;
 const HEX_IMPORT_SCALE_Y = 1.25;
 const HEX_IMPORT_SCALE_Z = 1.25;
+//const CUSTOM_IMPORT_SCALE_Y = 3.0;
 
 function roundToHalfStep(value) {
   return Math.round((Number(value) || 0) * 2) / 2;
@@ -915,7 +916,7 @@ export function createCustomAssetRegistry({ THREE, storageKey = STORAGE_KEY } = 
     const isHex = normalizeGridMode(record.gridMode) === GRID_MODE_HEX;
     const template = createNormalizedTemplate(THREE, geometry, material, {
       scaleX: isHex ? HEX_IMPORT_SCALE_X : 1,
-      scaleY: isHex ? HEX_IMPORT_SCALE_Y : 1,
+      scaleY: isHex ? HEX_IMPORT_SCALE_Y : 1, //CUSTOM_IMPORT_SCALE_Y,
       scaleZ: isHex ? HEX_IMPORT_SCALE_Z : 1,
     });
     recordTemplates.set(record.id, template);
