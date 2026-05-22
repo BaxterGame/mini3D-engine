@@ -42,7 +42,7 @@ if (location.protocol === 'file:') {
       '`python -m http.server` puis va sur `http://localhost:8000`.';
   }
 }
-
+//
 const THREE = window.THREE;
 
 (function bootstrap() {
